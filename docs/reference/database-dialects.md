@@ -41,7 +41,7 @@ Every column intended to store JSON has a name ending in `_json`. This is a hard
 The adapters exploit it:
 
 - **On read** — any column whose name ends in `_json` and whose value is a non-empty string is auto-`JSON.parse`d. Repositories receive a `Record<string, unknown>`, not a string. Postgres `jsonb` values already arrive parsed; this read normalizer covers `_json` columns backed by text.
-- **On write** — the SQLite adapter auto-`JSON.stringify`s any plain object or array passed via tagged-template interpolation. Postgres relies on `Bun.sql` parameter binding and native `jsonb` handling where the backing column is `jsonb`.
+- **On write** — the SQLite adapter auto-`JSON.stringify`s any plain object or array passed via tagged-template interpolation. Postgres relies on `Bun.sql`, which binds by the parameter's inferred column type: objects and arrays bound to a `jsonb` parameter are JSON-encoded natively (a pre-stringified value would be double-encoded into a JSON string scalar), but an **array bound to a `text` parameter goes through `Array#toString`** and lands as `[object Object]`. A text-backed `_json` column therefore stringifies explicitly at the writer — today that is only `ai_messages.content_json` (`appendMessage`). Prefer `jsonb` for new JSON columns.
 
 Result: repository code is identical across dialects:
 

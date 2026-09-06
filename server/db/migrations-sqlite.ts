@@ -1287,4 +1287,17 @@ export const sqliteMigrations: Migration[] = [
         on plugin_media_sources (asset_id);
     `,
   },
+  {
+    // Before the explicit JSON.stringify in appendMessage, Postgres bound the
+    // content block ARRAY to this text column through Array#toString, so every
+    // row read "[object Object]" and the model never saw prior turns. The
+    // original text is unrecoverable; an empty block list keeps positions and
+    // ids intact and is skipped by buildMessageHistory. SQLite never hit this
+    // (its adapter stringifies on write) — the statement is a no-op there.
+    id: '029_ai_messages_repair_unserialised_content',
+    sql: `
+      update ai_messages set content_json = '[]'
+        where content_json like '[object Object]%';
+    `,
+  },
 ]

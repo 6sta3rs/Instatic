@@ -60,6 +60,10 @@ export function buildMessageHistory(records: MessageRecord[]): AiMessage[] {
   }
 
   for (const rec of records) {
+    // A user/assistant row with no blocks carries nothing for the model — it is
+    // a row repaired by migration 029 (content lost to the pre-fix Postgres
+    // write path). Replaying it as an empty turn only confuses the model.
+    if (rec.role !== 'tool' && rec.content.length === 0) continue
     if (rec.role === 'user') {
       // Close any open assistant run first: a real user turn cannot follow an
       // unanswered tool_use. Synthetic results are emitted as a `tool` run that

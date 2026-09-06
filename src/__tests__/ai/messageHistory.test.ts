@@ -276,3 +276,22 @@ describe('user-image history projection', () => {
     expect(JSON.stringify(history)).toBe(original)
   })
 })
+
+describe('buildMessageHistory — repaired rows', () => {
+  test('drops content-less user and assistant rows instead of replaying empty turns', () => {
+    // Migration 029 rewrites rows the pre-fix Postgres write path stored as
+    // "[object Object]" to an empty block list; they must vanish from replay.
+    const history = buildMessageHistory([
+      rec('user', []),
+      userText('napisz posta'),
+      rec('assistant', []),
+      rec('assistant', [{ kind: 'text', text: 'Jasne.' }]),
+      userText('o bmw'),
+    ])
+    expect(history).toEqual([
+      { role: 'user', content: [{ kind: 'text', text: 'napisz posta' }] },
+      { role: 'assistant', content: [{ kind: 'text', text: 'Jasne.' }] },
+      { role: 'user', content: [{ kind: 'text', text: 'o bmw' }] },
+    ])
+  })
+})
