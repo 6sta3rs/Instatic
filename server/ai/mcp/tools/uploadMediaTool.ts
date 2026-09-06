@@ -12,9 +12,9 @@
  * The `sourceUrl` branch is the sharp edge: letting the server fetch an
  * arbitrary URL is a classic SSRF vector (`http://169.254.169.254/…` cloud
  * metadata, `localhost` admin ports). It is gated exactly like the plugin
- * network layer — https-only, DNS-resolved, every resolved address checked
- * against the shared `isBlockedAddress` blocklist, redirects followed manually
- * and re-validated per hop, and the download size-capped while streaming.
+ * network layer: HTTPS-only, DNS-resolved and pinned, redirects followed
+ * manually and re-validated per hop, and the download size-capped while
+ * streaming.
  */
 import { Type } from '@core/utils/typeboxHelpers'
 import type { Static } from '@core/utils/typeboxHelpers'
@@ -25,7 +25,7 @@ import {
   acceptUploadedMedia,
 } from '../../../handlers/cms/mediaUpload'
 import { updateMediaAssetMetadata } from '../../../repositories/media'
-import { downloadRemoteImage } from '../../../handlers/cms/remoteImageFetch'
+import { downloadRemoteMedia } from '../../../media/remoteDownload'
 
 const MAX_FILENAME_CHARS = 255
 const MAX_SOURCE_URL_CHARS = 2_048
@@ -126,7 +126,11 @@ export const uploadMediaMcpTool: AiTool = {
     ctx.signal.throwIfAborted()
     const bytes = hasData
       ? decodeInlineImage(args.data!)
-      : await downloadRemoteImage(args.sourceUrl!, MAX_MEDIA_BYTES, ctx.signal)
+      : await downloadRemoteMedia(args.sourceUrl!, {
+          signal: ctx.signal,
+          maxBytes: MAX_MEDIA_BYTES,
+          label: 'MCP media_upload',
+        })
     if (bytes.length === 0) {
       throw new Error('Decoded image is empty.')
     }

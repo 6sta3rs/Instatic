@@ -51,7 +51,7 @@ const ALLOWLIST: ReadonlyMap<string, string> = new Map([
   // exports. No request handlers live here.
   ['shared.ts', 'Shared request helpers; no handlers.'],
   ['session.ts', 'Session lookup helper; called from auth.ts which gates.'],
-  // Media upload helpers — `acceptUploadedMedia`, `readUploadedFile`,
+  // Media upload helpers — `acceptUploadedMedia`, `readUploadForm`,
   // file-magic sniffing. Always called by an already-gated parent
   // handler (`/me/avatar`, `/media`).
   ['mediaUpload.ts', 'Multipart parse helper called by gated parent handlers.'],
@@ -60,7 +60,6 @@ const ALLOWLIST: ReadonlyMap<string, string> = new Map([
   ['unsplashClient.ts', 'Outbound Unsplash API client called by gated parent handlers.'],
   // SSRF-guarded outbound image download shared by the Unsplash importer and
   // the MCP upload tool; both callers gate before reaching it.
-  ['remoteImageFetch.ts', 'Outbound fetch helper called by gated parent handlers.'],
   ['svgSanitize.ts', 'Pure SVG sanitiser called by mediaUpload (itself gated parents); no handlers.'],
   // Byte-level MIME validation + SVG sanitisation + write-destination policy
   // for imported media. Called by both import.ts and importArchive.ts, which

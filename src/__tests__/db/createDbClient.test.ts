@@ -47,7 +47,7 @@ describe('createDbClient — DATABASE_URL dialect selection', () => {
         const { rows } = await db<{ count: number }>`select count(*) as count from schema_migrations`
         expect(rows[0]?.count).toBe(sqliteMigrations.length)
 
-        // Windows: an open SQLite handle makes the temp dir undeletable (EBUSY).
+        // Release the handle before withTempDir's finally removes the directory.
         await db.close()
       }
     })

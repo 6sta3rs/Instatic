@@ -21,6 +21,7 @@ The workspace is canvas-style: it uses `AdminWorkspaceCanvasLayout`, the lighter
 - **Asset actions overlay:** in the viewer, actions on the asset float over the top-right of the image itself — crop as a standing icon, the rest behind a `…` menu. `MediaPickerField` deliberately carries none of them: it offers only Change and Clear, and its tile opens the viewer for everything else.
 - **Image fit:** `base.image` has an `objectFit` control (`Default` / `Cover` / `Contain`) — the per-instance knob that makes the asset's focus area do anything.
 - **Unsplash:** optional, enabled by setting `UNSPLASH_ACCESS_KEY`. Browse or search Unsplash from the Media toolbar and import a photo into the library, or replace an existing asset's file from the viewer. See "Unsplash import".
+- **Plugin media ingestion:** `api.cms.media.upsert(...)` lets plugins import allowlisted HTTPS images or contained package assets through the same validation, storage, and responsive-variant pipeline as admin uploads.
 
 ---
 
@@ -228,6 +229,10 @@ create index media_asset_folders_folder_idx on media_asset_folders (folder_id)
 
 Assets with no folder rows are root-level assets. The **All files** view still includes every active asset, while drag/drop onto **All files** clears folder membership and moves the asset back to the root.
 
+### `plugin_media_sources`
+
+This table records host-owned provenance for media synchronized by plugins. `(plugin_id, source_key)` is the primary key, and `asset_id` is unique so every plugin source converges on one managed asset. `source_version` enables a no-read fast path; `content_hash` detects unchanged bytes when a source has no usable version field. Replacing the source file preserves `asset_id`, so content rows never need their media references rewritten.
+
 JSON columns end in `_json` per the convention — see [docs/reference/database-dialects.md](../reference/database-dialects.md).
 
 ---
@@ -259,6 +264,10 @@ Folder routes (`/admin/api/cms/media/folders/...`) are matched **before** asset 
 ### Upload pipeline
 
 Uploads initiated outside the Media page use the same pipeline. In particular, the Agent Panel's explicit **Save to Media** image action resolves the private chat image, wraps it in a MIME-correct `File`, and calls `uploadCmsMediaAsset`; it does not create an AI-specific storage route. On success, `mediaAssetEvents.ts` upserts the new row into an already-mounted Site → Media explorer while the normal media cache is primed for canvas consumers.
+
+The multipart body carries the `file` part and, optionally, an `altText` text part: Site Import sends the authored `<img alt>` so the record is created with it (`createMediaAsset` writes `alt_text`), instead of leaving every imported image blank for the user to back-fill. Every other upload omits it and the record starts empty.
+
+Plugins enter this same pipeline through `api.cms.media.upsert(...)`. Only source metadata crosses QuickJS. For a `remote` source, the Bun host performs a bounded, SSRF-guarded download. For a `pluginAsset` source, it reads a package-relative file beneath the plugin's canonical installed asset root and rejects traversal or symlink escapes. Both branches call the ordinary create or replace path, so storage-adapter election, MIME sniffing, intrinsic dimensions, BlurHash, and responsive variants stay identical to an admin upload. The provenance row determines whether the call creates, replaces, or returns the existing asset unchanged.
 
 ```text
 POST /admin/api/cms/media
@@ -294,7 +303,7 @@ mediaVariants.ts (host)    ← streams each returned variant through
 media_assets row created, variants_json populated for raster sources
 ```
 
-SVG uploads are sanitized and stored as originals only. GIF uploads also stay original-only so animation is preserved; the responsive WebP ladder is generated only for JPEG, PNG, and WebP uploads.
+SVG uploads are sanitized and stored as originals only. GIF uploads also stay original-only so animation is preserved; the responsive WebP ladder is generated for JPEG, PNG, WebP, and AVIF uploads.
 
 The ladder encodes one WebP per target width (64 / 320 / 640 / 1024 / 1600 / 2048) **below** the source's intrinsic width — never upscaled — plus one rung **at** the intrinsic width. That top rung exists so `srcset` can be built from variants alone: the original file (often a multi-MB PNG) never appears as a srcset candidate, because a high-DPI display asking for more pixels than the largest sub-intrinsic rung would otherwise select it (`sizes="1280px"` on a 2x screen requests 2560 device px). `buildMediaSrcset` (publisher) and `buildVariantSrcset` (admin surfaces) both enforce the variants-only rule at render time. The `sizes` attribute has no user knob: the publisher's `resolveAutoSizes` (`src/core/publisher/sizesResolver.ts`) derives it from the layout it generates the CSS for — pixel caps, `%`/`vw` widths, px paddings, and grid column tracks all compose into exact CSS math per viewport tier (e.g. `(max-width: 375px) 100vw, min(33.33vw - 16px, 410.67px)`); constructs it can't model (flex rows, auto-fit grids) degrade to the container width, which only ever over-fetches, never blurs. Lazy images prefix the `auto` keyword so Chromium-based browsers select by the actual rendered width.
 
@@ -430,7 +439,7 @@ See [docs/features/plugin-system.md](plugin-system.md). The plugin SDK's `api.cm
 | Hardcoding `/uploads/...` URLs in modules                            | Use the asset's `public_path` (the host owns the URL shape) |
 | Filling `<img>` `srcset` manually                                    | Use `variants_json` + the publisher's `mediaPresentation.ts`|
 | Adding a docked panel to the Media page                              | Use a floating window — Media is canvas-style by design     |
-| Calling `api.cms.media.*` from a plugin without the matching media permission | Declare `media.storage.adapter`, `media.url.transform`, or `media.variant.delegate` |
+| Calling `api.cms.media.*` from a plugin without the matching media permission | Declare `media.import`, `media.storage.adapter`, `media.url.transform`, or `media.variant.delegate` as appropriate |
 | Treating `deleted_at IS NOT NULL` rows as gone                       | They're in Trash; restore is supported until purge          |
 | Skipping `parent_id, slug` uniqueness when creating folders          | The unique constraint enforces it — handle the error path   |
 
@@ -453,6 +462,8 @@ See [docs/features/plugin-system.md](plugin-system.md). The plugin SDK's `api.cm
   - `src/core/persistence/cmsMedia.ts` — client-facing wire schema + API (`CmsMediaAsset`, `CmsMediaVariant`)
   - `server/repositories/mediaAssetMapping.ts` — canonical `media_assets` projection + row mapper (shared by repo and publisher)
   - `server/repositories/media.ts` — `MediaAsset` / `MediaVariant` domain types + CRUD
+  - `server/repositories/pluginMediaSources.ts` — stable plugin source-to-asset provenance
+  - `server/media/remoteDownload.ts`, `ingestion.ts` — guarded source reads + idempotent managed-media upsert
   - `server/handlers/cms/media*.ts` — handlers
   - `server/repositories/mediaFolders.ts`, `mediaMigration.ts`, `mediaStorageAdapters.ts` — folder / migration / adapter repos
   - `server/publish/mediaPresentation.ts`, `mediaPrefetch.ts` — publisher integration
@@ -465,3 +476,4 @@ See [docs/features/plugin-system.md](plugin-system.md). The plugin SDK's `api.cm
   - `src/__tests__/architecture/media-signed-redirect-serving.test.ts`
   - `src/__tests__/architecture/media-storage-no-bytes-in-sandbox.test.ts`
   - `src/__tests__/architecture/media-storage-panel.test.ts`
+  - `src/__tests__/server/pluginMediaIngestion.test.ts`

@@ -105,7 +105,7 @@ Your whole design system lives as data. Change one token and every page that use
 - **Templates** handle the shared chrome. One layout for the whole site, separate layouts per post type, and a real 404 page you design yourself. Content flows into an outlet, so a header and footer get written once and wrap everything.
 - **Loops** repeat a layout over a collection: your posts, your pages, your media, or anything a plugin exposes as a source. Give a loop a couple of variants and it alternates between them as it goes. Good for post lists, product grids, galleries.
 - **Forms that belong to your CMS.** Build a form out of semantic fields and the submissions land in your own data tables. Instatic can read the fields you placed and create the matching table for you. No third-party form service, no embed, no monthly fee for a contact form.
-- **An AI agent that actually edits the page.** Describe what you want and it builds it on the canvas as real, editable nodes, not a screenshot or a wall of code. It writes semantic HTML for structure and CSS for style, through the same import pipeline you use when you paste markup. A 35-tool Site scope builds pages; a 15-tool Content scope edits entries. Bring your own model: Claude, OpenAI, OpenRouter, or local Ollama. Your key, your model, your bill.
+- **An AI agent that actually edits the page.** Describe what you want and it builds it on the canvas as real, editable nodes, not a screenshot or a wall of code. It writes semantic HTML for structure and CSS for style, through the same import pipeline you use when you paste markup. A 40-tool Site scope builds pages and components; a 15-tool Content scope edits entries. Bring your own model: Claude, OpenAI, OpenRouter, or local Ollama. Your key, your model, your bill.
 - **Imports that hold up.** Paste raw HTML and get editable nodes. Or drop a whole static site — HTML, CSS, images, fonts — and Super Import turns it into pages, style rules, design tokens, and media. Every conflict is shown to you before anything is written, and the entire import is a single undo.
 
 ### 🗂 Manage
@@ -232,6 +232,54 @@ bun run lint
 ```
 
 Dig in: [docs index](docs/README.md) · [architecture](docs/architecture.md) · [editor](docs/editor.md) · [server](docs/server.md) · [publisher](docs/features/publisher.md) · [plugin system](docs/features/plugin-system.md)
+
+<br>
+
+## What this fork adds
+
+This fork tracks [CoreBunch/Instatic](https://github.com/CoreBunch/Instatic) and adds editor work on top of it — mostly on the two surfaces you touch all day: the colour/fill pipeline and the inspector.
+
+### Shipped in `main`
+
+**Colour, as a proper editor.** A saturation/brightness surface, hue and alpha tracks, HEX/RGB/HSL with an opacity field, the native eyedropper where the browser has one, a searchable design-token list, and **New Style** — name a colour and it becomes a framework token, bound to the field you were editing, without a detour through the Colors panel. The colour surface and both tracks are `role="slider"` and steppable from the keyboard. It lives in a floating panel you can drag out of the way; it dodges the editor's sidebars, and only one is ever open at a time.
+
+**Gradients as a first-class fill.** Linear, radial and conic, with an editable stop strip: click to add a stop (its colour interpolated at that position), drag to move, double-click to remove. Behind the swatch, one control owns both `background-color` and `background-image` — switching between solid and gradient swaps them in a single patch, so it's one undo step, and a `url(...)` background is left alone rather than clobbered. Gradients are reachable from the background swatch and from Background image → Custom; they stay off `color` and `border-color`, where CSS can't hold them anyway.
+
+**Gradient handles on the element itself.** When the selected element's active style target carries a gradient, the canvas draws the gradient line across it. Drag a stop to slide it, drag the end cap to rotate (Shift snaps to 15°). Radial gets stops but no rotation; conic gets both. The geometry is the real CSS gradient line — `|w·sinθ| + |h·cosθ|`, not the box diagonal — and it's unit-tested.
+
+Both the picker and the gizmo are **optimistic**: local state moves every frame, while the store/CRDT/canvas commit is throttled to ~15 Hz with a guaranteed trailing emit, and the floating panel drags by writing CSS custom properties straight to the DOM instead of re-rendering.
+
+**Visual Component variants.** A `classBindings` channel on the tree lets an enum parameter on a component map each of its values to a CSS class — the styling counterpart to `propBindings`, which can only ever change props, never appearance. Pick "Primary / Ghost / Danger" on an instance and the matching class is appended after the node's own classes, so the variant wins the cascade and the publisher keeps its CSS. A **Variants** section in the Properties panel wires every enum param to a class or "No class", and five new agent tools (`site_create_component`, `site_insert_component`, `site_set_component_params`, `site_bind_component_prop`, `site_bind_component_variant`) give the AI the same reach.
+
+**~23,700 icons, nine packs.** Pixelarticons, Feather, Font Awesome 6, Material, Bootstrap, Ionicons 5, Remix, Tabler, and Simple Icons brands. Only the registry is imported eagerly; each pack loads on demand. The picker emits inline SVG markup into a `base.svg` node, so it still passes through the publisher's sanitize boundary and none of the icon-import architecture gates are bent.
+
+**Non-destructive media crop with a focus area.** Crop and focus are stored on the asset as 0–1 rectangles against the *original* upload (`crop_json`, `focus_json`; two additive migrations). Cropping reads the pristine bytes, so the original is never rewritten and clearing the crop restores the full frame. Every derivative — dimensions, BlurHash, the whole variant ladder — is regenerated from the cropped frame, and variant filenames carry a crop hash so a re-crop writes new paths instead of overwriting files already baked into published HTML. Moving only the focus point skips re-encoding entirely. `base.image` gained an `objectFit` control (`default` / `cover` / `contain`), which is what gives the focus point something to do; the publisher and the canvas map focus through the crop with the same helper.
+
+**Unsplash import.** Optional — set `UNSPLASH_ACCESS_KEY` and it appears; leave it unset and it doesn't exist. Browse the editorial feed or search, from the Media toolbar, the media picker, or an existing asset's viewer to replace its file. The client sends a photo ID, never a URL: the server re-fetches through Unsplash's own download endpoint, pulls the bytes through the same SSRF-guarded downloader and the same sniffing, size ceiling, and variant pipeline as a hand-dragged file. Attribution links are rendered on every tile and written into the imported asset's caption (pinned by tests), and the download ping fires on import.
+
+**Fixes worth calling out.**
+
+- Replacing a media file now **keeps its public URL**. It used to mint a fresh storage path, turning every page tree, style rule and published page that referenced the old one into a 404. The new bytes reuse the previous path when the extension matches; a `?v=<epoch>` stamp handles cache-busting, and the canvas swaps its asset cache in place instead of clearing it and waiting, so a replaced image updates without a reload.
+- `DbClient.close()` — an open SQLite handle made the file undeletable on Windows (`EBUSY`) and broke temp-database teardown. Adding it turned a large block of server tests green on Windows with zero regressions.
+
+### On branches, not yet merged
+
+**`feat/inspector-panel-redesign`** — a rebuild of the inspector around nine scoped sections: Position, Size, Layout, Spacing, Styles, Typography, Effects, Transforms, Interaction. The old "Advanced" disclosures are gone — on six of the sections a searchable `+` menu adds a property, rows appear only once set, and each added row carries its own remove dash. Border and Shadows moved into popouts, Radius gained a per-corner mode, Effects became a real section with four effects translated both ways between CSS and their parameters, and the class bar now shows which breakpoint edits are landing on. New primitives: `FloatingPanel` (portalled, draggable, with drill-in sub-views instead of stacked panels), `StepGroup`, `SwatchRow`, `UnitField`, `ScopeGroup`, `PositionControl`, and `Input` grew a hover stepper and drag-to-scrub. Spacing is a nested margin/padding box you scrub band by band, with a hatched overlay drawn on the canvas in zoom-stable screen space and a value-editor popout that offers the framework's spacing tokens; Position gets the same box for inset, plus pins that freeze an axis. On the canvas: **radius handles** that follow the inspector's all-vs-per-corner scope (Alt flips it per drag), a **ratio-locked resize** where the lock is one piece of state shared by the panel row and the handle (Shift flips it), and free-move dragging for absolutely-positioned elements that rewrites whichever inset sides the element actually stores — mirroring `right`/`bottom` rather than stranding them — with ±4 screen-px snap guides to sibling and parent edges. Two surface ramps (`--card-*` / `--panel-*`) resolved by a `data-surface` stamp mean the sidebar, the inspector, and every popout finally share one field appearance. It also fixed the "border does nothing" bug at its root: a unitless `border-top-width: 400` was invalid CSS, so width fields moved to `UnitField` and `border*Width` joined the length properties. 342 files, 20 new test files, including a prototype-parity gate that asserts the control scale against the original HTML mock. Still open: Blend, the Transforms rotate/scale/origin rows, and a handful of author decisions (opacity scale, hover-effect popout, accessibility section).
+
+**Nothing in the editor waits for a commit.** This is the optimisation thread running through both the shipped colour work and the inspector branch:
+
+- Dragging a number field, a canvas handle, or a colour track moves the element on the frame the pointer moves. The gesture writes a preview — inline style inside the iframe, or through a `previewInlineStyles` / `previewClassStyles` channel in the store — and the document commit lands once, on release. One drag is one undo entry.
+- High-frequency input is coalesced, not amplified: a 1000 Hz mouse produces one apply per animation frame; the colour picker's store/CRDT emit is trailing-throttled to 64 ms with a flush on unmount; a canvas gesture echoes into the inspector's fields on the same 64 ms budget while the element itself follows every frame.
+- Every scrub takes pointer capture past a 4 px threshold, so the drag survives crossing the canvas iframe instead of losing moves and handing back one accumulated jump on re-entry.
+- Design frames neutralise the page's own `transition`s on `[data-node-id]` and descendants, so an edit lands this frame rather than gliding after the cursor. The live frame and all animations are untouched.
+- The cost is measured, not hidden: the Site editor body chunk's budget moved from 780 KB to 880 KB for the redesign's weight, with the reason written into the gate itself.
+
+
+**UI primitives, split into reviewable branches:**
+
+- `refactor/control-height-scale` — one height scale (24 / 30 / 36 px) shared by `Button`, `Input`, `Select` and `SegmentedControl`, replacing per-module hardcoded pixels that made a button and an input in the same row impossible to align.
+- `feat/number-field-primitive` — a `NumberField` with a hover-revealed stepper, horizontal drag-to-scrub (4px per step, Shift ×10, pointer-captured so it survives leaving the control), and unit passthrough: `auto`, `1fr` and `var(--space-m)` pass through untouched, a typed unit wins over the field's own, and typing commits on Enter or blur rather than per keystroke.
+- `feat/button-group-primitive` — a `ButtonGroup` fused bar replacing two hand-rolled copies of the same chip switcher in the Properties panel.
 
 <br>
 

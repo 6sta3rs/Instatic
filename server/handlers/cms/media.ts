@@ -70,7 +70,7 @@ import {
   MAX_MEDIA_BYTES,
   acceptReplacementMedia,
   acceptUploadedMedia,
-  readUploadedFile,
+  readUploadForm,
 } from './mediaUpload'
 import { processImageVariants, removeVariantFiles } from './mediaVariants'
 import { dispatchDelete } from './mediaUploadDispatch'
@@ -205,7 +205,7 @@ async function handleUploadMedia(req: Request, db: DbClient): Promise<Response> 
   const user = await requireCapability(req, db, 'media.write')
   if (user instanceof Response) return user
 
-  const file = await readUploadedFile(req)
+  const { file, altText } = await readUploadForm(req)
   if (!file) return badRequest('Missing file')
 
   const result = await acceptUploadedMedia(db, {
@@ -214,6 +214,7 @@ async function handleUploadMedia(req: Request, db: DbClient): Promise<Response> 
     allowedMimes: MEDIA_LIBRARY_MIMES,
     role: 'original',
     uploadedByUserId: user.id,
+    ...(altText !== undefined ? { altText } : {}),
     oversizedMessage: 'File exceeds the 50 MB hard limit',
     unsupportedMessage: 'Only JPEG, PNG, GIF, WebP, SVG, MP4, WebM, and web font (WOFF, WOFF2, TTF, OTF) files can be uploaded',
   })
@@ -245,7 +246,7 @@ async function handleReplaceMedia(
   const user = await requireCapability(req, db, 'media.replace')
   if (user instanceof Response) return user
 
-  const file = await readUploadedFile(req)
+  const { file } = await readUploadForm(req)
   if (!file) return badRequest('Missing file')
 
   const result = await acceptReplacementMedia(db, params.id, {

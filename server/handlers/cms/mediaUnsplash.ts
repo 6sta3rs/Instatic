@@ -43,7 +43,7 @@ import {
   acceptUploadedMedia,
 } from './mediaUpload'
 import { updateMediaAssetMetadata } from '../../repositories/media'
-import { downloadRemoteImage } from './remoteImageFetch'
+import { downloadRemoteMedia } from '../../media/remoteDownload'
 import {
   UnsplashApiError,
   UnsplashNotConfiguredError,
@@ -147,7 +147,11 @@ async function handleImport(req: Request, db: DbClient): Promise<Response> {
 
   let bytes: Uint8Array<ArrayBuffer>
   try {
-    bytes = await downloadRemoteImage(downloadUrl, MAX_MEDIA_BYTES, req.signal)
+    bytes = await downloadRemoteMedia(downloadUrl, {
+      signal: req.signal,
+      maxBytes: MAX_MEDIA_BYTES,
+      label: 'Unsplash import',
+    })
   } catch (err) {
     console.error('[mediaUnsplash] photo download failed:', err)
     return jsonResponse(

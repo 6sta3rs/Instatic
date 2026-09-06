@@ -273,6 +273,25 @@ The `renderNode` callback is the publisher's normal walker — so a variant's su
 
 See [docs/features/publisher.md](publisher.md) → "renderLoop" for the broader pipeline.
 
+### The wrapper element
+
+`renderLoop` emits one wrapper around the iterations, and the canvas
+(`LoopEditor.tsx`) mirrors it attribute for attribute so user CSS targeting
+`[data-instatic-loop] > article` matches in both places.
+
+| Source | Attributes |
+|---|---|
+| Runtime | `data-instatic-loop`, `data-instatic-loop-page`, plus `data-instatic-loop-mode` / `-has-more` / `-page-size` in infinite mode |
+| Author | `tag` / `customTag` choose the element; `htmlAttributes` adds arbitrary attributes, same control as `base.container` |
+| Node | `classIds` → class names, `inlineStyles` → `style` |
+
+The `htmlAttributes` bag is what lets a repeated list be *addressed*: `role="list"`
+and `aria-label` for assistive technology, or a `data-*` hook for a carousel,
+filter, or marquee script that has to find the collection wrapper. Values pass
+through the shared sanitiser (`src/core/htmlAttributes/`), which reserves the
+`data-instatic-*` and `data-canvas-*` prefixes — so the loop's own bookkeeping
+cannot be redirected from the attributes panel.
+
 ---
 
 ## Prefetch
@@ -467,7 +486,35 @@ To enable infinite loading:
 3. The publisher auto-injects `<script type="module" src="/_instatic/assets/loop-runtime.js">` when at least one infinite loop exists on the page (see `server/publish/loopRuntime.ts`). The runtime is < 2 KB and ships only when needed.
 
 For static multi-page navigation (no JS required):
+- Set `pagination: 'infinite'` and link the pages with the query parameter below — the server renders each page. See "Deep-link to a loop page".
 - Use separate `base.loop` nodes with an `offset` filter — one per "page" — and static links between pages.
+
+### Deep-link to a loop page
+
+An infinite-mode loop also renders any page of its own results server-side, driven by a query parameter. `loopPageQueryKey` (`server/publish/loopPrefetch.ts:177`) builds the name as `loop_<loopNodeId>_page`, so every loop on a page paginates independently:
+
+```text
+/blog?loop_Oz1G1FKV5FyxdlFDNKeZP_page=2
+```
+
+`readPageNumber` (`server/publish/loopPrefetch.ts:204`) reads it 1-based. A missing, empty, non-numeric, or sub-1 value falls back to page 1 — there is no error and no 400. The slice is `props.offset + (pageNumber - 1) * props.pageSize` (`loopPrefetch.ts:229-236`).
+
+`publicRouter.ts:224-240` routes any request whose canonical query is non-empty past the Layer A disk artefact and into a live Layer B render, so the response is fully server-rendered and the result set differs with JavaScript disabled. `canonicalRenderQuery` (`loopPrefetch.ts:194`) keeps only `loop_<nodeId>_page` params, sorted, and discards the rest — `?utm_source=x` still collapses to `''` and hits the baked artefact.
+
+Four constraints bound what this can express:
+
+| Constraint | Behaviour |
+|---|---|
+| `pagination` must be `'infinite'` | `loopPrefetch.ts:229` consults the URL only in that mode. Under `'none'` the parameter is ignored silently and the loop always renders page 1. |
+| Contextual sources are excluded | `entry.field` never resolves a page number (`loopPrefetch.ts:292-299`, `src/core/publisher/renderLoop.ts:155-159`). |
+| Out-of-range pages render nothing | Zero items makes `renderLoop` return the empty string (`src/core/publisher/renderLoop.ts:78-80`) — no wrapper element, no attributes, no fallback text at the loop's position. |
+| No total is exposed | The wrapper carries `data-instatic-loop-page` and `data-instatic-loop-has-more` (`renderLoop.ts:111-116`), and `/_instatic/loop/<loopId>` returns `{ html, hasMore, pageNumber }` (`server/handlers/cms/loop.ts:131`, `:169`). Neither carries an item or page count, so "Page 3 of 12" is not derivable. |
+
+Link the pages with ordinary anchors, and bound the upper page number from the authored data rather than probing for it:
+
+```html
+<a href="?loop_Oz1G1FKV5FyxdlFDNKeZP_page=2">Next</a>
+```
 
 ---
 
@@ -482,6 +529,7 @@ For static multi-page navigation (no JS required):
 | Rendering a loop without prefetched data                             | `RenderConfig.loopData` must be populated — otherwise the loop renders a marker comment. |
 | Cycling variants by index `% items.length` instead of `% variants.length` | Round-robin is by variants. Read `node.children.length`. |
 | Source ids without a namespace (just `products`)                     | Namespace by plugin (`acme.products`) — collisions otherwise |
+| `?loop_<nodeId>_page=N` on a `pagination: 'none'` loop               | Silently ignored — the loop always renders page 1. Set `pagination: 'infinite'`. |
 
 ---
 
@@ -501,7 +549,10 @@ For static multi-page navigation (no JS required):
   - `src/core/publisher/renderLoop.ts` — render walker
   - `server/publish/loopPrefetch.ts` — pre-fetch
   - `server/publish/loopRuntime.ts`, `server/handlers/cms/loop.ts` — runtime asset + live-fetch endpoint
+  - `server/publish/publicRouter.ts` — routes `loop_<nodeId>_page` requests past the static artefact
 - Gate tests:
   - `src/__tests__/architecture/loop-source-id-format.test.ts`
   - `src/__tests__/architecture/loop-source-sql-safety.test.ts`
   - `src/__tests__/loops/sitePagesLoopItemParity.test.ts` — canvas preview ↔ publisher parity for `site.pages`
+  - `src/__tests__/publisher/canonicalRenderQuery.test.ts` — which query params survive canonicalisation
+  - `src/__tests__/architecture/static-artefact-served-before-render.test.ts` — Layer A fast-path eligibility

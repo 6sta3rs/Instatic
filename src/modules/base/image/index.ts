@@ -25,9 +25,9 @@ import { focusObjectPosition } from './focusPosition'
 import { ImageSolidIcon } from 'pixel-art-icons/icons/image-solid'
 import { escapeHtml, safeUrl } from '@modules/base/utils/escape'
 import {
-  htmlAttributesAttr,
   htmlAttributesControl,
 } from '@modules/base/shared/htmlAttributes'
+import { htmlAttributesAttr } from '@core/publisher'
 import { buildMediaSrcset } from '@modules/base/utils/mediaAttrs'
 import { ImageEditor } from './ImageEditor'
 import { shouldUseBlurPlaceholder } from './placeholder'

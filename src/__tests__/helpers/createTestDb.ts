@@ -14,7 +14,11 @@ export interface TestDb {
  * with all migrations applied. Each call produces a unique, independent DB.
  *
  * Set `DB=postgres TEST_POSTGRES_URL=postgres://...` to run against a real
- * Postgres instance instead; `cleanup()` closes that pool too.
+ * Postgres instance instead.
+ *
+ * `cleanup()` closes the client before removing anything on disk. Windows
+ * refuses to unlink a file that is still open, so a SQLite handle left to
+ * garbage collection makes teardown fail there with EBUSY.
  *
  * @example
  * const { db, cleanup } = await createTestDb()
@@ -24,24 +28,6 @@ export interface TestDb {
  *   await cleanup()
  * }
  */
-/**
- * Delete a test's temp directory, tolerating a Windows quirk: the OS releases
- * the SQLite (and WAL/SHM) handles a beat after `close()` returns, so an
- * immediate `rm` can still hit EBUSY. Retry briefly, then give up quietly —
- * a leftover directory under the OS temp dir is housekeeping, and failing a
- * teardown would report a PASSING test as broken, which is strictly worse.
- */
-async function removeTempDir(dir: string): Promise<void> {
-  for (let attempt = 0; attempt < 5; attempt += 1) {
-    try {
-      await fs.rm(dir, { recursive: true, force: true })
-      return
-    } catch {
-      await new Promise((resolve) => setTimeout(resolve, 20 * (attempt + 1)))
-    }
-  }
-}
-
 export async function createTestDb(): Promise<TestDb> {
   if (process.env['DB'] === 'postgres') {
     const url = process.env['TEST_POSTGRES_URL']
@@ -65,11 +51,10 @@ export async function createTestDb(): Promise<TestDb> {
   return {
     db,
     cleanup: async () => {
-      // Close BEFORE removing. Unlinking an open file is fine on macOS/Linux
-      // but fails with EBUSY on Windows, which made every temp-DB teardown
-      // throw there even though the test itself had passed.
+      // Close before unlinking: the file, and its WAL/SHM siblings, stay
+      // locked on Windows while the handle is open.
       await db.close()
-      await removeTempDir(path.dirname(tmpFile))
+      await fs.rm(path.dirname(tmpFile), { recursive: true, force: true })
     },
   }
 }
