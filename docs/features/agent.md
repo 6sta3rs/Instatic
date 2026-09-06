@@ -14,7 +14,7 @@ The agent runs on a provider-agnostic AI runtime (`server/ai/`) that can drive a
 
 - **Structure via HTML.** `site_insert_html` and `site_replace_node_html` accept semantic HTML strings; the browser executor calls `importHtml` (the same pipeline as the paste-HTML UI) to convert them into first-class, editable `PageNode`s.
 - **Styling via CSS.** The agent emits CSS the same way a human pastes it: a `<style>` block and/or `class=` attributes inside the `site_insert_html`/`site_replace_node_html` payload, or the standalone `site_apply_css` tool. The importer (`cssToStyleRules`) classifies every selector — class-bearing selectors become reusable Selectors-panel classes while preserving the full selector and decoded class token; class-free selectors (`a:hover`, `nav > li`) become ambient rules; `style=` attributes land on the node's inline styles. There is no structured `classes` parameter — the agent never hand-builds classes node-by-node at insert time. `site_apply_css` is the single tool for CSS on its own, with explicit merge, replace, rule-delete, and property-removal operations; exact selector identity and `!important` priority survive the round trip.
-- **Site scope: 35 tools total.** 6 server-side catalog read tools (resolved server-side from the posted snapshot / DB) + 29 browser-bridged tools.
+- **Site scope: 40 tools total.** 6 server-side catalog read tools (resolved server-side from the posted snapshot / DB) + 34 browser-bridged tools.
 - **Content scope: 15 tools total.** 7 server-side content/catalog/media/user read tools + 8 browser-bridged document mutation/navigation tools.
 - **Two-endpoint bridge.** `POST /admin/api/ai/chat/:scope` opens an NDJSON stream. When the model calls a browser-bridged tool, the server emits `toolRequest`; the browser executor reads or mutates the live workspace and POSTs the `AiToolOutput` result to `POST /admin/api/ai/tool-result`.
 - **Provider-agnostic.** The runtime selects a driver (Anthropic, OpenAI, OpenRouter, Ollama, Custom Provider) from the conversation's configured credential.
@@ -375,9 +375,9 @@ Resolved server-side from the posted `SiteAgentSnapshot` or the data repositorie
 | `site_list_loop_sources` | Loop source ids, source fields, order/filter options, and data-table field catalogs with valid `{currentEntry.field}` tokens. For post/custom table loops, use source id `data.rows`, the returned table `id` as `<instatic-loop data-table-id>`, and the returned tokens inside the loop body |
 | `site_list_tokens`     | Design tokens: colors (with shades/tints), typography/spacing scale steps, font tokens — each with CSS variable + utility classes; optional `family` filter (`colors`\|`typography`\|`spacing`\|`fonts`) |
 
-### Site browser tools — 29, browser-bridged
+### Site browser tools — 34, browser-bridged
 
-All 29 tools carry `execution: 'browser'` in their `AiTool` definition. The server emits `toolRequest`; the browser executor validates input with TypeBox, runs the store action or read helper, and POSTs the canonical `AiToolOutput` result back.
+All 34 tools carry `execution: 'browser'` in their `AiTool` definition. The server emits `toolRequest`; the browser executor validates input with TypeBox, runs the store action or read helper, and POSTs the canonical `AiToolOutput` result back.
 
 **Documents**
 
@@ -446,6 +446,15 @@ The agent calls `site_list_loop_sources` first to get the valid source id, data 
 | `site_assign_class` | `{ nodeId, classId }` | none                                    | Attach an existing class to a node; `classId` accepts id or name|
 | `site_remove_class` | `{ nodeId, classId }` | none                                    | Detach a class from a node (the class itself remains) |
 
+**Visual Components**
+
+| Tool | Input | Success `data` | What it does |
+|------|-------|----------------|--------------|
+| `site_create_component` | `{ name, fromNodeId? }` | `{ componentId, rootNodeId }` | Create a Visual Component. With `fromNodeId`, componentizes an existing subtree in place (same as the editor's Componentize button); without it, an empty definition to fill via `site_insert_html` |
+| `site_insert_component` | `{ componentId, parentId, index? }` | `{ nodeId }` | Place a `base.visual-component-ref` instance; slot params materialize their `base.slot-instance` children. Errors on a missing parent or a self-containing cycle |
+| `site_set_component_params` | `{ componentId, params: [{ id?, name, type?, required?, defaultValue?, enumOptions? }], removeMissing? }` | `{ params }` | Declare or update typed params, matched by `id` then `name`. Type is fixed after creation; `enum` needs `enumOptions` |
+| `site_bind_component_prop` | `{ nodeId, propKey, paramId? }` | none | Point a node prop inside the definition at a param; omit `paramId` to clear |
+
 **Code assets**
 
 Scripts and user stylesheets live in `site.files[]`; runtime targeting and loading options live in `site.runtime.scripts` / `site.runtime.styles`. These tools expose that existing Code Editor storage to the agent, so behavior such as theme toggles, tabs, menus, filters, and DOM-ready interactions is authored as a real runtime script instead of attempted through HTML import.
@@ -511,7 +520,7 @@ The agent works **design-system-first**: it establishes or reuses tokens, then r
 
 ### Auto-navigation
 
-When a node-targeting write tool (`site_insert_html`, `site_get_node_html`, `site_replace_node_html`, `site_delete_node`, `site_update_node_props`, `site_move_node`, `site_rename_node`, `site_duplicate_node`, `site_assign_class`, `site_remove_class`) receives a node id that belongs to a different document (another page, a template, or a VC), the executor automatically navigates the canvas to that document **before** running the mutation. This is done via `focusNodeDocument` in `executor.ts`, which calls `store.openPageInCanvas` or `store.setActiveDocument` as appropriate. The effect: the edit lands in the correct tree, stays visible to the user, and the mid-turn snapshot refresh picks up the navigated state for any subsequent read tool in the same turn.
+When a node-targeting write tool (`site_insert_html`, `site_get_node_html`, `site_replace_node_html`, `site_delete_node`, `site_update_node_props`, `site_move_node`, `site_rename_node`, `site_duplicate_node`, `site_assign_class`, `site_remove_class`, `site_create_component`, `site_insert_component`, `site_bind_component_prop`, `site_bind_component_variant`) receives a node id that belongs to a different document (another page, a template, or a VC), the executor automatically navigates the canvas to that document **before** running the mutation. This is done via `focusNodeDocument` in `executor.ts`, which calls `store.openPageInCanvas` or `store.setActiveDocument` as appropriate. The effect: the edit lands in the correct tree, stays visible to the user, and the mid-turn snapshot refresh picks up the navigated state for any subsequent read tool in the same turn.
 
 `site_render_snapshot`, catalog tools (`site_list_documents`, etc.), and token tools have no node target — they are excluded from auto-navigation.
 
@@ -808,7 +817,7 @@ unblocks deletion of the credential that had been protected by the default FK.
   - `src/core/ai/documentRefs.ts` — document refs/descriptors for pages, templates, and visual components
   - `src/core/ai/readSurface.ts` — runtime-agnostic `renderAgentDocument` annotated HTML + compact CSS renderer
   - `src/core/ai/index.ts` — barrel re-exporting the above
-  - `server/ai/tools/site/writeTools.ts` — 29 browser-bridged site tool definitions (uses `@core/ai` input schemas)
+  - `server/ai/tools/site/writeTools.ts` — 34 browser-bridged site tool definitions (uses `@core/ai` input schemas)
   - `server/ai/tools/site/readTools.ts` — 6 server-side catalog tool definitions
   - `server/ai/tools/site/render.ts` — `describeAgentModules`, `describeAgentTokens`, `filterTokenFamily`
   - `server/ai/tools/site/systemPrompt.ts` — HTML-native system prompt

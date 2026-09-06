@@ -46,7 +46,7 @@
 /* Reserve the button's width so a long filename truncates before it rather
    than sliding underneath. Only applied when a clear button is present. */
 .tileRowClearable > *:first-child {
-    padding-right: calc(var(--space-s) + 26px);
+    padding-right: calc(var(--space-s) + var(--space-6xl));
 }
 
 /* Non-interactive tile (rare — used only when the caller wires no

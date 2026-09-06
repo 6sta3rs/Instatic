@@ -1476,7 +1476,9 @@ describe('PP-20b — Module settings exclude visual CSS fields', () => {
     expect(screen.getByTestId('property-control-loading')).toBeDefined()
     expect(screen.queryByTestId('property-control-width')).toBeNull()
     expect(screen.queryByTestId('property-control-height')).toBeNull()
-    expect(screen.queryByTestId('property-control-objectFit')).toBeNull()
+    // objectFit is a per-instance module prop (default / cover / contain); the asset's
+    // crop and focus point only mean something once the image is told how to fit.
+    expect(screen.getByTestId('property-control-objectFit')).toBeDefined()
     expect(screen.queryByTestId('property-control-borderRadius')).toBeNull()
   })
 })

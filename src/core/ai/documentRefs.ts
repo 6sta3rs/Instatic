@@ -19,7 +19,8 @@ export interface AgentDocumentDescriptor {
    * Visual components only — the param surface each instance can override.
    * Listed here because it is the only place a tool caller can discover param
    * ids, and every param-facing tool (`site_set_component_params`,
-   * `site_bind_component_prop`, `propOverrides` on a ref) is keyed by id.
+   * `site_bind_component_prop`, `site_bind_component_variant`, `propOverrides`
+   * on a ref) is keyed by id; `enumOptions` is what a variant binding maps.
    */
   params?: {
     id: string

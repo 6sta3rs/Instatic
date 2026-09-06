@@ -71,13 +71,16 @@ describe('ClassStyleInjector media backgrounds', () => {
     cleanup()
     document.head.replaceChildren()
     document.body.replaceChildren()
-    refreshCmsMediaAssetCache()
     resetEditorStore()
     globalThis.fetch = (async (input: RequestInfo | URL) => {
       const url = typeof input === 'string' ? input : input.toString()
       if (url.endsWith('/admin/api/cms/media')) return mediaResponse()
       return new Response('', { status: 404 })
     }) as typeof globalThis.fetch
+    // Refresh is fetch-then-swap, so the stub above must already be installed
+    // — otherwise the in-flight request hits the real network and every
+    // consumer that mounts meanwhile inherits that doomed promise.
+    refreshCmsMediaAssetCache()
   })
 
   afterEach(() => {

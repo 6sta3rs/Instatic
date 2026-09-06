@@ -161,6 +161,11 @@ function planParamChanges(
     if (effectiveType === 'enum' && spec.enumOptions !== undefined && spec.enumOptions.length === 0) {
       return { error: `Param "${spec.name}" is an enum, so enumOptions cannot be empty.` }
     }
+    if (effectiveType === 'enum' && !match && spec.enumOptions === undefined) {
+      return {
+        error: `Param "${spec.name}" is an enum, so it needs enumOptions — the dropdown would otherwise be empty.`,
+      }
+    }
 
     plan.push({ spec, existingId: match?.id ?? null })
   }
@@ -297,11 +302,13 @@ export function runBindComponentProp(
 // ---------------------------------------------------------------------------
 
 /**
- * Resolve a class SELECTOR (`btn-ghost` or `.btn-ghost`) to its stable id.
- * Names are what a caller can see and reason about; ids are what survives a
- * rename, so the binding stores the id.
+ * Resolve a class SELECTOR (`btn-ghost` or `.btn-ghost`) or a raw class id to
+ * its stable id. Names are what a caller can see and reason about; ids are
+ * what survives a rename, so bindings and assignments store the id. Shared
+ * with site_assign_class / site_remove_class in `executor.ts` so both tool
+ * families accept the same spellings.
  */
-function resolveClassId(store: EditorStore, selectorOrId: string): string | null {
+export function resolveClassId(store: EditorStore, selectorOrId: string): string | null {
   const rules = store.site?.styleRules
   if (!rules) return null
   const key = selectorOrId.startsWith('.') ? selectorOrId.slice(1) : selectorOrId
@@ -365,12 +372,21 @@ export function runBindComponentVariant(
     )
   }
 
-  // An enum param whose options and mapped values disagree is the likeliest
-  // authoring mistake, and it fails silently at render (the dropdown offers a
-  // value that maps to nothing), so surface it as a warning rather than a hard
-  // error — a partial map is legitimate when one option means "no class".
+  // A non-enum param gets a free-text field on every instance, so a typo
+  // silently renders no variant. The description demands `enum`; enforce it.
+  if (param.type !== 'enum') {
+    return aiToolError(
+      `Param "${param.name}" is ${param.type}, not enum — a variant needs a dropdown. ` +
+        `Re-declare it with site_set_component_params as type "enum" (one enumOption per key here).`,
+    )
+  }
+
+  // Options and mapped values disagreeing is the likeliest authoring mistake,
+  // and it fails silently at render (the dropdown offers a value that maps to
+  // nothing), so surface it as a warning rather than a hard error — a partial
+  // map is legitimate when one option means "no class".
   const warnings: string[] = []
-  if (param.type === 'enum') {
+  {
     const options = param.enumOptions ?? []
     const unknownValues = Object.keys(resolved).filter((value) => !options.includes(value))
     if (unknownValues.length > 0) {
@@ -379,11 +395,6 @@ export function runBindComponentVariant(
           `${unknownValues.join(', ')}. Options are: ${options.join(', ') || '(none)'}.`,
       )
     }
-  } else {
-    warnings.push(
-      `Param "${param.name}" is ${param.type}, not enum — instances get a free-text field ` +
-        `rather than a dropdown, so a typo silently renders no variant.`,
-    )
   }
 
   store.setNodeClassBinding(input.nodeId, input.paramId, resolved)

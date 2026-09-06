@@ -207,7 +207,7 @@ const assignClassTool: AiTool = {
   execution: 'browser',
   requiredCapabilities: SITE_STYLE_CAPS,
   description:
-    "Attach an existing CSS class to a node. `classId` accepts id or name.",
+    "Attach an existing CSS class to a node. `classId` accepts the class id or its selector (`btn-ghost` or `.btn-ghost`).",
   inputSchema: AssignClassInputSchema,
 }
 
@@ -217,7 +217,7 @@ const removeClassTool: AiTool = {
   execution: 'browser',
   requiredCapabilities: SITE_STYLE_CAPS,
   description:
-    'Detach a class from a node (the class itself is not deleted). `classId` accepts id or name.',
+    'Detach a class from a node (the class itself is not deleted). `classId` accepts the class id or its selector (`btn-ghost` or `.btn-ghost`).',
   inputSchema: RemoveClassInputSchema,
 }
 
@@ -414,10 +414,11 @@ const renderSnapshotTool: AiTool = {
 // Visual Component tools
 //
 // A Visual Component is the reusable-structure primitive: one definition, many
-// `base.visual-component-ref` instances. Styling is NOT parameterisable —
-// params feed module props (text, href, image, colour VALUE), never classes or
-// inline styles. For a base+variant look, put the base class inside the
-// definition and add the variant class to each ref node with site_assign_class.
+// `base.visual-component-ref` instances. Params reach the definition through two channels:
+// `propBindings` carry VALUES into module props (text, href, image, colour),
+// and `classBindings` map an enum param's values to CSS classes so a variant
+// param can drive appearance. One-off styling on an instance still goes
+// through site_assign_class.
 // ---------------------------------------------------------------------------
 
 const createComponentTool: AiTool = {
@@ -436,7 +437,7 @@ const insertComponentTool: AiTool = {
   execution: 'browser',
   requiredCapabilities: SITE_STRUCTURE_CAPS,
   description:
-    'Place an instance of an existing Visual Component under `parentId` in the active document, creating a `base.visual-component-ref` node. This is the only way to reuse a component — there is no HTML marker for it, so never try to write one into site_insert_html. `componentId` comes from site_create_component or site_list_documents (documents of type "visualComponent"). Slot params materialize their `base.slot-instance` children automatically, ready to receive content. Per-instance values go on the ref node: content via `propOverrides` (site_update_node_props), appearance via classes (site_assign_class) — a variant is a class on the instance, not a param. Errors instead of silently doing nothing when the parent is missing or the insertion would make a component contain itself.',
+    'Place an instance of an existing Visual Component under `parentId` in the active document, creating a `base.visual-component-ref` node. This is the only way to reuse a component — there is no HTML marker for it, so never try to write one into site_insert_html. `componentId` comes from site_create_component or site_list_documents (documents of type "visualComponent"). Slot params materialize their `base.slot-instance` children automatically, ready to receive content. Per-instance values go on the ref node: content via `propOverrides` (site_update_node_props), appearance via classes (site_assign_class) for one-off styling, or by picking a variant param value that the definition maps to a class via site_bind_component_variant. Errors instead of silently doing nothing when the parent is missing or the insertion would make a component contain itself.',
   inputSchema: InsertComponentInputSchema,
 }
 
@@ -446,7 +447,7 @@ const setComponentParamsTool: AiTool = {
   execution: 'browser',
   requiredCapabilities: SITE_STRUCTURE_CAPS,
   description:
-    'Declare a Visual Component\'s params — the typed inputs each instance can override. Send the params you want; each entry is matched to an existing param by `id` when given, otherwise by `name`, so repeat calls update rather than duplicate. Supplying `id` with a different `name` renames in place and keeps existing bindings and overrides intact. Types: string, number, boolean, url, enum, color, image, richText, slot (`slot` accepts nested content on each instance; `enum` renders as a dropdown and needs `enumOptions`). A param\'s type is FIXED after creation — to change it, drop the param and add it again. Omitted fields are left untouched; pass `removeMissing: true` to delete every param absent from the call, which also cleans up its bindings and per-instance overrides. Params carry VALUES into module props; they cannot switch classes or styles, so do not model visual variants as a param.',
+    'Declare a Visual Component\'s params — the typed inputs each instance can override. Send the params you want; each entry is matched to an existing param by `id` when given, otherwise by `name`, so repeat calls update rather than duplicate. Supplying `id` with a different `name` renames in place and keeps existing bindings and overrides intact. Types: string, number, boolean, url, enum, color, image, richText, slot (`slot` accepts nested content on each instance; `enum` renders as a dropdown and needs `enumOptions`). A param\'s type is FIXED after creation — to change it, drop the param and add it again. Omitted fields are left untouched; pass `removeMissing: true` to delete every param absent from the call, which also cleans up its bindings and per-instance overrides. Params carry VALUES into module props, so a variant param does not carry the class itself — declare it as `enum` and map its values to classes with site_bind_component_variant.',
   inputSchema: SetComponentParamsInputSchema,
 }
 
@@ -456,7 +457,7 @@ const bindComponentPropTool: AiTool = {
   execution: 'browser',
   requiredCapabilities: SITE_STRUCTURE_CAPS,
   description:
-    "Point a node's prop at a Visual Component param, so every instance renders its own value there — e.g. bind a Text node's `text` to a `label` param, or a Link's `href` to a `url` param. The node must live INSIDE the component definition; the canvas switches to its component automatically. Omit `paramId` to clear the binding (the prop keeps whatever value it last rendered, and a param nothing else references is garbage-collected). Bind content props only: `class` and `style` are not props, so appearance still comes from classes on the instance. Add the params first with site_set_component_params.",
+    "Point a node's prop at a Visual Component param, so every instance renders its own value there — e.g. bind a Text node's `text` to a `label` param, or a Link's `href` to a `url` param. The node must live INSIDE the component definition; the canvas switches to its component automatically. Omit `paramId` to clear the binding (the prop keeps whatever value it last rendered, and a param nothing else references is garbage-collected). Bind content props only: `class` and `style` are not props — to make a param drive appearance, use site_bind_component_variant instead. Add the params first with site_set_component_params.",
   inputSchema: BindComponentPropInputSchema,
 }
 

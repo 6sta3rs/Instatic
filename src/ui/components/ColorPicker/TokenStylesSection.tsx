@@ -13,8 +13,18 @@ import { Button } from '@ui/components/Button'
 import { Input } from '@ui/components/Input'
 import { SearchBar } from '@ui/components/SearchBar'
 import { safeCssColor } from './colorMath'
-import type { ColorPickerToken } from './ColorPicker'
 import styles from './ColorPicker.module.css'
+
+export interface ColorPickerToken {
+  /** The CSS custom-property name, including the leading `--`. */
+  name: string
+  /** The resolved colour the swatch previews. */
+  value: string
+  /** Optional secondary label (e.g. a variant name). */
+  meta?: string
+  /** Stable list key when several tokens share a name. */
+  key?: string
+}
 
 type SwatchVars = CSSProperties & { '--color-picker-swatch'?: string }
 

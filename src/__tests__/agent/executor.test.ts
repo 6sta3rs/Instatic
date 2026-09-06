@@ -1876,3 +1876,60 @@ describe('executeAgentTool — unknown tool name', () => {
     expect(result.error).toContain('Unknown')
   })
 })
+
+// ---------------------------------------------------------------------------
+// Visual Component tools — validation the model relies on
+// ---------------------------------------------------------------------------
+
+describe('executeAgentTool — component tool validation', () => {
+  async function componentWithClass() {
+    const { rootId } = freshStore()
+    const vcId = useEditorStore.getState().createVisualComponent('Button')
+    const vc = useEditorStore.getState().site!.visualComponents.find((item) => item.id === vcId)!
+    // A class the variant binding and the class tools can both resolve.
+    expectToolOk(
+      await executeAgentTool('site_insert_html', {
+        parentId: rootId,
+        html: '<style>.btn-ghost { opacity: 0.5; }</style><div class="btn-ghost"></div>',
+      }),
+    )
+    useEditorStore.getState().setActiveDocument({ kind: 'visualComponent', vcId })
+    return { vcId, rootNodeId: vc.tree.rootNodeId, pageRootId: rootId }
+  }
+
+  it('site_set_component_params refuses to create an enum param without enumOptions', async () => {
+    const { vcId } = await componentWithClass()
+    const result = await executeAgentTool('site_set_component_params', {
+      componentId: vcId,
+      params: [{ name: 'tone', type: 'enum' }],
+    })
+    expectToolError(result)
+    expect(result.error).toContain('enumOptions')
+  })
+
+  it('site_bind_component_variant errors on a non-enum param instead of warning', async () => {
+    const { vcId, rootNodeId } = await componentWithClass()
+    const { params } = expectToolData<{ params: Array<{ id: string; name: string }> }>(
+      await executeAgentTool('site_set_component_params', {
+        componentId: vcId,
+        params: [{ name: 'label', type: 'string' }],
+      }),
+    )
+    const result = await executeAgentTool('site_bind_component_variant', {
+      nodeId: rootNodeId,
+      paramId: params[0].id,
+      classByValue: { ghost: '.btn-ghost' },
+    })
+    expectToolError(result)
+    expect(result.error).toContain('not enum')
+  })
+
+  it('site_assign_class accepts the dotted selector form the variant tool advertises', async () => {
+    const { pageRootId } = await componentWithClass()
+    const pageId = useEditorStore.getState().activePageId!
+    useEditorStore.getState().openPageInCanvas(pageId)
+    expectToolOk(await executeAgentTool('site_assign_class', { nodeId: pageRootId, classId: '.btn-ghost' }))
+    const site = useEditorStore.getState().site!
+    expect(classNamesForClassIds(site.styleRules, site.pages[0].nodes[pageRootId].classIds)).toContain('btn-ghost')
+  })
+})

@@ -1,4 +1,5 @@
-export { ColorPicker, type ColorPickerToken } from './ColorPicker'
+export { ColorPicker } from './ColorPicker'
+export type { ColorPickerToken } from './TokenStylesSection'
 export {
   formatGradient,
   gradientColorAt,

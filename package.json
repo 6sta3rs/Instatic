@@ -31,6 +31,7 @@
     "lint": "eslint . --cache --cache-location .tmp-lint/eslint-cache",
     "preview": "bun run scripts/vite.ts preview",
     "test": "bun test",
+    "test:fast": "bun test --parallel=8",
     "test:e2e": "playwright test",
     "test:e2e:install": "playwright install chromium",
     "test:e2e:ui": "playwright test --ui",

@@ -59,7 +59,7 @@ import {
   type FillMode,
   type FillState,
 } from './fillState'
-import { TokenStylesSection } from './TokenStylesSection'
+import { TokenStylesSection, type ColorPickerToken } from './TokenStylesSection'
 import { UnitStepperInput } from './UnitStepperInput'
 import { beginDrag, frameThrottle, handleGridKeys, handleTrackKeys } from './interaction'
 import styles from './ColorPicker.module.css'
@@ -78,17 +78,6 @@ declare global {
   interface Window {
     EyeDropper?: EyeDropperConstructor
   }
-}
-
-export interface ColorPickerToken {
-  /** The CSS custom-property name, including the leading `--`. */
-  name: string
-  /** The resolved colour the swatch previews. */
-  value: string
-  /** Optional secondary label (e.g. a variant name). */
-  meta?: string
-  /** Stable list key when several tokens share a name. */
-  key?: string
 }
 
 interface ColorPickerProps {

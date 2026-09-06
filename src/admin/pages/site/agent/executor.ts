@@ -90,6 +90,7 @@ import {
 import { runRenderSnapshotAtBreakpoint } from './renderSnapshotAtBreakpoint'
 import { parseImportedStyleCss, runApplyCss } from './cssTools'
 import {
+  resolveClassId,
   runBindComponentProp,
   runBindComponentVariant,
   runCreateComponent,
@@ -142,29 +143,6 @@ const renderSnapshotSchema = Type.Composite([
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-/**
- * Resolve a classId that may be either a real nanoid (checked first) or a
- * class name (fallback lookup). Returns the resolved ID string, or null if
- * no matching class is found.
- *
- * Lets Claude reference a class by name in tools that only accept a single
- * class identifier (site_assign_class/site_remove_class), without needing to remember the
- * generated nanoid from a previous site_apply_css call.
- */
-function resolveClassId(
-  store: EditorStore,
-  classIdOrName: string,
-): string | null {
-  const classes = store.site?.styleRules
-  if (!classes) return null
-  if (classes[classIdOrName]) return classIdOrName
-  // Filter (not find) so we can detect ambiguity. Uniqueness is enforced at
-  // createClass time in the class slice; this guard is defence-in-depth.
-  const matches = Object.values(classes).filter((c) => c.name === classIdOrName)
-  if (matches.length > 1) return null
-  return matches[0]?.id ?? null
-}
 
 function validateBreakpointId(
   store: EditorStore,
