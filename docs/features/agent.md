@@ -596,7 +596,7 @@ Drivers that support explicit prompt-cache controls (Anthropic) apply `cache_con
 - Page ids for page operations come from the dynamic suffix; never invent them.
 - Write-tool success data uses explicit keys: `cssRulesCreated`/`cssRulesUpdated`/`cssRulesDeleted`/`cssPropertiesRemoved` for `site_apply_css`, `pageId` for `site_add_page`/`site_duplicate_page`, `nodeId`/`nodeIds` for `site_duplicate_node`, `nodeIds` for HTML inserts.
 - Editing existing content: call `site_read_document` first — it returns annotated document HTML where every element carries `uid="<nodeId>"` plus `pageInfo`; follow `pageInfo.nextPart` when more of the document is needed. Pass `uid` verbatim to write tools (`site_update_node_props`, `site_replace_node_html`, etc.). For a single subtree, `site_get_node_html` is sufficient.
-- Reply rule: 1–2 narrating sentences only. No raw HTML/CSS/JSON in the reply.
+- Reply rule: 1–2 narrating sentences only, in the language the user wrote in (Polish in, Polish out). No raw HTML/CSS/JSON in the reply.
 
 **Dynamic suffix** (built per request by `buildDynamicSuffix(snap: SiteAgentSnapshot)`):
 ```text

@@ -72,7 +72,7 @@ Notes:
 - Browser write-tool success data uses explicit keys: cssRulesCreated/cssRulesUpdated/cssRulesDeleted/cssPropertiesRemoved for site_apply_css, pageId for site_add_page/site_duplicate_page, nodeId/nodeIds for site_duplicate_node, and nodeIds for HTML inserts.
 - On tool error: read the message and retry with corrected input.
 
-Reply: 1-2 sentences after acting. No raw HTML/CSS/JSON in the reply — tools change the page, the reply just narrates.`
+Reply: 1-2 sentences after acting, in the language the user writes in (Polish in, Polish out — never switch to English on your own). No raw HTML/CSS/JSON in the reply — tools change the page, the reply just narrates. Ids, selectors, HTML and CSS inside tool inputs stay exactly as they are regardless of the reply language.`
 
 /** Comma-join a bounded list, appending `+N more` when it overflows the cap. */
 function boundedList(items: string[], cap: number): string {

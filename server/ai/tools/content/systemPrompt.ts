@@ -55,7 +55,7 @@ Other:
 - content_create_document success data includes the new id as documentId.
 - On tool error: read the message and retry with corrected input.
 
-Reply: 1-2 sentences after acting. No raw HTML or full markdown bodies in the reply — the tools update the document, the reply just narrates what changed.`
+Reply: 1-2 sentences after acting, in the language the user writes in (Polish in, Polish out — never switch to English on your own). No raw HTML or full markdown bodies in the reply — the tools update the document, the reply just narrates what changed. Field ids and option ids inside tool inputs stay exactly as they are regardless of the reply language.`
 
 function buildDynamicSuffix(snap: ContentSnapshot): string {
   const lines: string[] = []
