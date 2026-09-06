@@ -80,11 +80,14 @@ import { cn } from '@ui/cn'
 import { CopyPlusSolidIcon } from 'pixel-art-icons/icons/copy-plus-solid'
 import { TrashSolidIcon } from 'pixel-art-icons/icons/trash-solid'
 import { HandGrabSolidIcon } from 'pixel-art-icons/icons/hand-grab-solid'
+import { useActiveStyleTarget } from '@site/store/useActiveStyleTarget'
 import { CanvasViewportActionsContext } from './CanvasContexts'
 import { CanvasInsertModuleButton } from './CanvasInsertModuleButton'
+import { useCanvasFreeMoveDrag } from './useCanvasFreeMoveDrag'
 import { useCanvasReorderDrag } from './useCanvasReorderDrag'
 import { useCanvasTreeLadderOverlay } from './CanvasTreeLadderOverlay'
 import { useCanvasGradientGizmo } from './CanvasGradientGizmo'
+import { SpacingHighlightOverlay } from './SpacingHighlightOverlay'
 import { CanvasNodeElementCache } from './canvasNodeLookup'
 import {
   createCanvasOverlayMeasureSession,
@@ -95,11 +98,18 @@ import {
   dropIndicatorStyle,
   hideOverlayElement,
   measureSelectorHighlightRects,
+  positionDimensionBadge,
   positionOverlayElement,
+  positionRadiusHandles,
+  positionResizeHandles,
   positionToolbar,
   rectStyle,
+  RADIUS_HANDLE_CORNERS,
+  RESIZE_HANDLE_DIRECTIONS,
   syncSelectorHighlightRings,
 } from './canvasSelectionOverlayPositioning'
+import { useCanvasResizeDrag } from './useCanvasResizeDrag'
+import { readCornerRadii, useCanvasRadiusDrag } from './useCanvasRadiusDrag'
 import styles from './BreakpointSelectionOverlay.module.css'
 
 interface BreakpointSelectionOverlayProps {
@@ -181,6 +191,11 @@ export function BreakpointSelectionOverlay({
   const ringRefs = useRef<Map<string, HTMLDivElement | null> | null>(null)
   if (ringRefs.current === null) ringRefs.current = new Map()
   const hoverRef = useRef<HTMLDivElement>(null)
+  // Resize handles + corner-radius dots + dimension badge — single-selection
+  // chrome, positioned in the same WRITE phase as the rings.
+  const resizeHandlesRef = useRef<HTMLDivElement>(null)
+  const radiusHandlesRef = useRef<HTMLDivElement>(null)
+  const dimensionBadgeRef = useRef<HTMLDivElement>(null)
   // Container whose children are the orange selector-affinity rings. Their
   // count is driven by the live DOM (how many elements match the selector), so
   // they're created/positioned imperatively in the RAF tick rather than mapped
@@ -262,6 +277,24 @@ export function BreakpointSelectionOverlay({
     panBy: viewportActions?.panBy,
     canvasRootRef: viewportActions?.canvasRootRef,
   })
+  // A positioned element grabs as a free move (rewrites its stored offsets); anything
+  // else falls through to the tree reorder drag — see useCanvasFreeMoveDrag.
+  const styleTarget = useActiveStyleTarget()
+  const freeMoveDrag = useCanvasFreeMoveDrag({
+    iframeElement,
+    styleTarget,
+    canvasRootRef: viewportActions?.canvasRootRef,
+  })
+  const resizeDrag = useCanvasResizeDrag({ iframeElement, styleTarget })
+  const radiusDrag = useCanvasRadiusDrag({ iframeElement, styleTarget })
+  // Handles resize via the style channel, so they need style-edit capability
+  // (the drag itself falls back to inline styles when no class is active);
+  // scoped to the active frame like the toolbar so only one frame grows chrome.
+  const showResizeChrome =
+    showRings &&
+    permissions.canEditStyle &&
+    selectedNodeIds.length === 1 &&
+    activeBreakpointId === breakpointId
 
   // Each RAF tick reads the freshest selection / hover / toolbar inputs from
   // the latest render closure via useEffectEvent. Because the tick always reads
@@ -298,6 +331,9 @@ export function BreakpointSelectionOverlay({
       hideOverlayElement(hoverRef.current)
       syncSelectorHighlightRings(selectorHighlightRef.current, null)
       hideOverlayElement(toolbarRef.current)
+      positionResizeHandles(resizeHandlesRef.current, null)
+      positionRadiusHandles(radiusHandlesRef.current, null, [], 1)
+      positionDimensionBadge(dimensionBadgeRef.current, null, 1, null, { left: 0, top: 0 })
       return
     }
 
@@ -328,10 +364,30 @@ export function BreakpointSelectionOverlay({
       session,
     )
 
+    // Single-selection chrome (resize handles + radius dots + dimension badge)
+    // anchors to the one ring rect already measured — nothing is measured
+    // twice. The radius dots also read the element's used corner radii here,
+    // in the READ phase, so the dots sit on the curves they edit (and follow
+    // a drag preview frame by frame).
+    const singleRect =
+      showResizeChrome && ringPlacements.length === 1 ? ringPlacements[0].rect : null
+    const singleElement =
+      singleRect ? elementCache.resolve(iframeDoc, selectedNodeIds[0]) : null
+    const singleRadii =
+      singleElement && iframeDoc.defaultView
+        ? readCornerRadii(iframeDoc.defaultView.getComputedStyle(singleElement))
+        : []
+
     // ── WRITE phase ─────────────────────────────────────────────────────
     for (const { ring, rect } of ringPlacements) positionOverlayElement(ring, rect)
     positionOverlayElement(hoverRef.current, hoverRect)
     syncSelectorHighlightRings(selectorHighlightRef.current, selectorRects)
+    positionResizeHandles(resizeHandlesRef.current, singleRect)
+    positionRadiusHandles(radiusHandlesRef.current, singleRect, singleRadii, session.scale)
+    positionDimensionBadge(dimensionBadgeRef.current, singleRect, session.scale, session.canvasRect, {
+      left: session.scrollLeft,
+      top: session.scrollTop,
+    })
     positionToolbar(
       toolbarRef.current,
       showToolbar ? toolbarUnion : null,
@@ -395,7 +451,9 @@ export function BreakpointSelectionOverlay({
         aria-label="Drag selected layers"
         tooltip="Drag selected layers"
         className={cn(styles.selectionToolbarButton, styles.dragToolbarButton)}
-        onPointerDown={reorderDrag.handlePointerDown}
+        onPointerDown={(event) => {
+          if (!freeMoveDrag.tryBegin(event)) reorderDrag.handlePointerDown(event)
+        }}
       >
         <HandGrabSolidIcon size={13} color="var(--text)" />
       </Button>
@@ -462,6 +520,59 @@ export function BreakpointSelectionOverlay({
           data-node-id={hoverRingNodeId}
         />
       )}
+      {showResizeChrome && (
+        <>
+          {/* display:none here is initial state, not styling: the RAF WRITE
+              phase owns display/transform/size imperatively (same channel as
+              the rings), and without the pre-hide the chrome would flash at
+              the layer origin for one frame before the first tick. */}
+          <div
+            ref={resizeHandlesRef}
+            className={styles.resizeHandleLayer}
+            data-canvas-resize-handles="true"
+            // Portaled into the canvas root, whose onClick clears the
+            // selection on background clicks — a click that started on a
+            // handle must not bubble there and unmount the handles mid-use.
+            onClick={(event) => event.stopPropagation()}
+          >
+            {RESIZE_HANDLE_DIRECTIONS.map((direction) => (
+              <div
+                key={direction}
+                className={styles.resizeHandle}
+                data-direction={direction}
+                style={{ display: 'none' }}
+                onPointerDown={(event) => resizeDrag.begin(event, direction)}
+              />
+            ))}
+          </div>
+          {/* Corner-radius dots: one per corner, just inside the ring on the
+              corner's diagonal. Pull inward to round (all corners; Alt = this
+              one). Same imperative placement contract as the resize handles. */}
+          <div
+            ref={radiusHandlesRef}
+            className={styles.resizeHandleLayer}
+            data-canvas-radius-handles="true"
+            onClick={(event) => event.stopPropagation()}
+          >
+            {RADIUS_HANDLE_CORNERS.map((corner) => (
+              <div
+                key={corner}
+                className={styles.radiusHandle}
+                data-corner={corner}
+                title="Drag to round the corners (Alt: this corner only)"
+                style={{ display: 'none' }}
+                onPointerDown={(event) => radiusDrag.begin(event, corner)}
+              />
+            ))}
+          </div>
+          <div
+            ref={dimensionBadgeRef}
+            className={styles.dimensionBadge}
+            data-canvas-dimension-badge="true"
+            style={{ display: 'none' }}
+          />
+        </>
+      )}
     </div>
   ) : null
 
@@ -494,6 +605,15 @@ export function BreakpointSelectionOverlay({
       {toolbar && createPortal(toolbar, portalTarget)}
       {treeLadder.portal}
       {gradientGizmo}
+      {/* Live margin/padding bands + value chips while the inspector's
+          Spacing box is being edited. Renders nothing (and runs no RAF loop)
+          unless `spacingHighlight` is active. */}
+      <SpacingHighlightOverlay
+        iframeElement={iframeElement}
+        canvasRoot={portalCanvasRoot}
+        portalTarget={portalTarget}
+        mode={toolbarMode}
+      />
     </>
   )
 }

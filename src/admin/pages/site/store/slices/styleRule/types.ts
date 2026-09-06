@@ -46,6 +46,16 @@ interface ClassStylesPreview {
   styles: Partial<CSSPropertyBag>
 }
 
+/**
+ * The inline sibling of ClassStylesPreview: a transient patch over ONE
+ * node's `inlineStyles`, overlaid by NodeRenderer while the inspector
+ * types / slides / hovers with an inline target. Never persisted.
+ */
+interface InlineStylesPreview {
+  nodeId: string
+  styles: Partial<CSSPropertyBag>
+}
+
 export type CssRuleApplyMode = 'merge' | 'replace'
 
 export interface CssRuleApplyResult {
@@ -87,6 +97,14 @@ export interface StyleRuleSlice {
   inlineStyleEditing: boolean
   setInlineStyleEditing(active: boolean): void
 
+  /**
+   * True while a gradient-capable colour picker popover is open. The canvas
+   * gradient gizmo draws only during that window — the picker being open IS
+   * the "editing a gradient" signal.
+   */
+  gradientPickerOpen: boolean
+  setGradientPickerOpen(open: boolean): void
+
   /** Transient class assignment previewed on the canvas while hovering a suggestion. */
   previewClassAssignment: ClassPreviewAssignment | null
   setPreviewNodeClass(nodeId: string, classId: string): void
@@ -96,6 +114,12 @@ export interface StyleRuleSlice {
   previewClassStyles: ClassStylesPreview | null
   setPreviewClassStyles(preview: ClassStylesPreview): void
   clearPreviewClassStyles(classId?: string): void
+
+  /** Transient inline-style patch previewed on the canvas for one node. */
+  previewInlineStyles: InlineStylesPreview | null
+  setPreviewInlineStyles(preview: InlineStylesPreview): void
+  /** Clears the preview; with `nodeId`, only when it targets that node. */
+  clearPreviewInlineStyles(nodeId?: string): void
 
   // ── CRUD ──────────────────────────────────────────────────────────────────
   /**

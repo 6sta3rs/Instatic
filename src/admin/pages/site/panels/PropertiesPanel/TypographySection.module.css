@@ -1,0 +1,41 @@
+/* TypographySection — the composite rows the prototype draws by hand
+   (Size = fontSize ⊕ lineHeight, Align = a fused icon button group).
+   Simple rows still go through ClassPropertyRow. */
+
+/* Row anatomy (label column, accent dot) comes from the shared ControlRow
+   primitive — this module only styles the composite control cells. */
+
+/* Prototype `.duo` — two equal cells in the control column. */
+.duo {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-s);
+    align-items: center;
+    min-width: 0;
+}
+
+.duo > * {
+    min-width: 0;
+}
+
+/* Cell carrying the prototype's trailing `.axis` tag ("lh"). */
+.tagCell {
+    position: relative;
+    display: flex;
+    align-items: center;
+    min-width: 0;
+}
+
+.tagCell > :first-child {
+    flex: 1;
+    min-width: 0;
+}
+
+.cellTag {
+    position: absolute;
+    right: var(--space-s);
+    color: var(--text-disabled);
+    font-size: var(--text-2xs);
+    text-transform: lowercase;
+    pointer-events: none;
+}

@@ -8,10 +8,10 @@
  * action that mints a token from the current colour.
  *
  * With `gradients` enabled the picker grows a fill-type icon row (Solid /
- * Linear / Radial / Conic) and a stop strip. In a gradient mode the whole solid-colour surface
- * edits the SELECTED stop: click the strip to add a stop, drag a handle to
- * move it, double-click to remove it. The emitted value is then a CSS
- * gradient string instead of a single colour.
+ * Linear / Radial / Conic) and a stop strip. In a gradient mode the whole
+ * solid-colour surface edits the SELECTED stop: click the strip to add a
+ * stop, drag a handle to move it, double-click to remove it. The emitted
+ * value is then a CSS gradient string instead of a single colour.
  *
  * The component is deliberately store-agnostic: tokens and token creation
  * arrive as props so `src/ui/` stays free of editor/state imports. The site
@@ -38,9 +38,9 @@ import { Input } from '@ui/components/Input'
 import { SegmentedControl } from '@ui/components/SegmentedControl'
 import { pushToast } from '@ui/components/Toast'
 import { getErrorMessage } from '@core/utils/errorMessage'
+import { clamp } from '@ui/lib/clamp'
 import {
   COLOR_FORMATS,
-  clamp,
   formatColor,
   hsvaToRgba,
   hueCss,
@@ -61,7 +61,13 @@ import {
 } from './fillState'
 import { TokenStylesSection, type ColorPickerToken } from './TokenStylesSection'
 import { UnitStepperInput } from './UnitStepperInput'
-import { beginDrag, frameThrottle, handleGridKeys, handleTrackKeys } from './interaction'
+import {
+  beginDrag,
+  createEmitThrottle,
+  frameThrottle,
+  handleGridKeys,
+  handleTrackKeys,
+} from './interaction'
 import styles from './ColorPicker.module.css'
 
 interface EyeDropperResult {
@@ -121,7 +127,7 @@ const FORMAT_LABELS: Record<ColorFormat, string> = {
   hsl: 'HSL',
 }
 
-const FILL_MODES: ReadonlyArray<{ value: FillMode; label: string }> = [
+const GRADIENT_TABS: ReadonlyArray<{ value: FillMode; label: string }> = [
   { value: 'solid', label: 'Solid' },
   { value: 'linear', label: 'Linear gradient' },
   { value: 'radial', label: 'Radial gradient' },
@@ -149,23 +155,21 @@ export function ColorPicker({
   // throttle in play the echo can be any of the last few emissions, and
   // treating an intermediate echo as external input would snap the drag back.
   const [recentEmits, setRecentEmits] = useState<string[]>([])
-  const emitThrottleRef = useRef<{ timer: number | null; trailing: string | null }>({
-    timer: null,
-    trailing: null,
-  })
   const onChangeRef = useRef(onChange)
   useEffect(() => {
     onChangeRef.current = onChange
   })
-  // Flush a pending trailing emission on unmount so the final drag position
-  // is never lost when the panel closes mid-throttle-window.
+  const emitThrottleRef = useRef<ReturnType<typeof createEmitThrottle> | null>(null)
+  // Created in an effect (not render) so the ref is never read during render.
+  // Event handlers only run after mount, so the throttle always exists by the
+  // time emit() fires. The cleanup flushes a pending trailing emission so the
+  // final drag position is never lost when the panel closes mid-window.
   useEffect(() => {
-    const throttle = emitThrottleRef.current
+    const throttle = createEmitThrottle(EMIT_THROTTLE_MS, (emitted) => onChangeRef.current(emitted))
+    emitThrottleRef.current = throttle
     return () => {
-      if (throttle.timer !== null) window.clearTimeout(throttle.timer)
-      if (throttle.trailing !== null) onChangeRef.current(throttle.trailing)
-      throttle.timer = null
-      throttle.trailing = null
+      throttle.flush()
+      emitThrottleRef.current = null
     }
   }, [])
 
@@ -198,39 +202,14 @@ export function ColorPicker({
     currentColorRef.current = formatColor(hsvaToRgba(hsva), format)
   })
 
-  /**
-   * Leading + trailing throttle around `onChange`. The first emission in a
-   * burst goes out immediately (single clicks stay instant); during a drag the
-   * heavy downstream update runs at most once per window, and the last value
-   * always lands. Local picker state is NOT throttled — that is the
-   * optimistic half.
-   */
-  function pushEmit(emitted: string) {
-    const throttle = emitThrottleRef.current
-    if (throttle.timer !== null) {
-      throttle.trailing = emitted
-      return
-    }
-    onChange(emitted)
-    const fire = () => {
-      const trailing = throttle.trailing
-      throttle.trailing = null
-      if (trailing === null) {
-        throttle.timer = null
-        return
-      }
-      onChangeRef.current(trailing)
-      throttle.timer = window.setTimeout(fire, EMIT_THROTTLE_MS)
-    }
-    throttle.timer = window.setTimeout(fire, EMIT_THROTTLE_MS)
-  }
-
   function emit(nextFill: FillState, nextFormat = format) {
     setFill(nextFill)
     setDraft(null)
     const emitted = formatFill(nextFill, nextFormat)
     setRecentEmits((current) => [...current.slice(-31), emitted])
-    pushEmit(emitted)
+    // Leading + trailing throttle: local picker state above is NOT throttled —
+    // that is the optimistic half; only the heavy `onChange` rides the window.
+    emitThrottleRef.current?.push(emitted)
   }
 
   /** Route a colour edit to the solid colour or the selected gradient stop. */
@@ -379,7 +358,7 @@ export function ColorPicker({
     <div className={styles.picker} style={surfaceStyle}>
       {gradients && (
         <div className={styles.fillTabs} role="group" aria-label="Fill type">
-          {FILL_MODES.map((mode, index) => (
+          {GRADIENT_TABS.map((mode, index) => (
             <Fragment key={mode.value}>
               {index > 0 && <span className={styles.fillTabSeparator} aria-hidden="true" />}
               <Button

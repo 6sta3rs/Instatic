@@ -214,6 +214,131 @@ export function positionToolbar(
   appliedOverlayPlacements.set(toolbar, placement)
 }
 
+/** Order matches the DOM children rendered by BreakpointSelectionOverlay. */
+export const RESIZE_HANDLE_DIRECTIONS = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'] as const
+export type ResizeHandleDirection = (typeof RESIZE_HANDLE_DIRECTIONS)[number]
+
+const HANDLE_HALF = 4 // half of the 8px handle, so it centres on the ring edge
+
+/**
+ * WRITE-phase placement of the eight resize handles around a selection rect.
+ * `container.children[i]` corresponds to RESIZE_HANDLE_DIRECTIONS[i]; each
+ * handle is translated so its centre sits on the ring's corner / edge
+ * midpoint. `rect === null` hides all handles.
+ */
+export function positionResizeHandles(
+  container: HTMLElement | null,
+  rect: CanvasOverlayRect | null,
+): void {
+  if (!container) return
+  if (!rect) {
+    for (const child of container.children) hideOverlayElement(child as HTMLElement)
+    return
+  }
+  const xs = { left: rect.x, mid: rect.x + rect.width / 2, right: rect.x + rect.width }
+  const ys = { top: rect.y, mid: rect.y + rect.height / 2, bottom: rect.y + rect.height }
+  const spots: Record<ResizeHandleDirection, [number, number]> = {
+    nw: [xs.left, ys.top],
+    n: [xs.mid, ys.top],
+    ne: [xs.right, ys.top],
+    e: [xs.right, ys.mid],
+    se: [xs.right, ys.bottom],
+    s: [xs.mid, ys.bottom],
+    sw: [xs.left, ys.bottom],
+    w: [xs.left, ys.mid],
+  }
+  RESIZE_HANDLE_DIRECTIONS.forEach((direction, i) => {
+    const handle = container.children[i] as HTMLElement | undefined
+    if (!handle) return
+    const [x, y] = spots[direction]
+    positionOverlayElement(handle, { x: x - HANDLE_HALF, y: y - HANDLE_HALF, width: 8, height: 8 })
+  })
+}
+
+/** Order matches the DOM children rendered by BreakpointSelectionOverlay. */
+export const RADIUS_HANDLE_CORNERS = ['nw', 'ne', 'se', 'sw'] as const
+export type RadiusHandleCorner = (typeof RADIUS_HANDLE_CORNERS)[number]
+
+/** Smallest selection (screen px) that still has room for radius dots between the corner handles. */
+const RADIUS_HANDLES_MIN_SIDE = 48
+/** A zero radius still needs a dot to grab — sit it just inside the corner. */
+const RADIUS_HANDLE_MIN_INSET = 12
+
+/**
+ * WRITE-phase placement of the four corner-radius dots: each sits on its
+ * corner's inward diagonal, `radius × zoom` from the corner (never closer
+ * than the minimum inset, never past the centre), so the dot tracks the
+ * curve it edits. `radii` are the element's used radii in CSS px, in
+ * RADIUS_HANDLE_CORNERS order. `rect === null`, or a selection too small to
+ * host the dots without them colliding with the resize handles, hides all.
+ */
+export function positionRadiusHandles(
+  container: HTMLElement | null,
+  rect: CanvasOverlayRect | null,
+  radii: readonly number[],
+  scale: number,
+): void {
+  if (!container) return
+  if (!rect || Math.min(rect.width, rect.height) < RADIUS_HANDLES_MIN_SIDE) {
+    for (const child of container.children) hideOverlayElement(child as HTMLElement)
+    return
+  }
+  const maxInset = Math.min(rect.width, rect.height) / 2
+  const right = rect.x + rect.width
+  const bottom = rect.y + rect.height
+  RADIUS_HANDLE_CORNERS.forEach((corner, i) => {
+    const handle = container.children[i] as HTMLElement | undefined
+    if (!handle) return
+    const inset = Math.min(maxInset, Math.max(RADIUS_HANDLE_MIN_INSET, (radii[i] ?? 0) * scale))
+    const x = corner === 'nw' || corner === 'sw' ? rect.x + inset : right - inset
+    const y = corner === 'nw' || corner === 'ne' ? rect.y + inset : bottom - inset
+    positionOverlayElement(handle, { x: x - HANDLE_HALF, y: y - HANDLE_HALF, width: 8, height: 8 })
+  })
+}
+
+/**
+ * WRITE-phase placement of the `W × H` dimension badge: centred under the
+ * selection rect, clamped to the canvas root's visible width so it slides
+ * inward at the viewport edge instead of being clipped. The label is the
+ * element's CSS-px size (overlay px ÷ zoom), so it matches the inspector.
+ */
+export function positionDimensionBadge(
+  badge: HTMLElement | null,
+  rect: CanvasOverlayRect | null,
+  scale: number,
+  canvasRect: DOMRect | null,
+  scroll: { left: number; top: number },
+): void {
+  if (!badge) return
+  if (!rect || scale <= 0) {
+    hideOverlayElement(badge)
+    return
+  }
+  const label = `${Math.round(rect.width / scale)} × ${Math.round(rect.height / scale)}`
+  if (badge.textContent !== label) badge.textContent = label
+  if (badge.style.display === 'none') badge.style.display = ''
+
+  let x = rect.x + rect.width / 2
+  if (canvasRect) {
+    // offsetWidth read lands after the textContent write above, but badge
+    // geometry is tiny and this runs once per frame at most — same trade the
+    // toolbar clamp makes.
+    const half = badge.offsetWidth / 2
+    const gutter = 4
+    x = Math.min(
+      Math.max(x, scroll.left + gutter + half),
+      scroll.left + canvasRect.width - gutter - half,
+    )
+  }
+  const placement: CanvasOverlayRect = { x, y: rect.y + rect.height + 6, width: 0, height: 0 }
+  const prev = appliedOverlayPlacements.get(badge)
+  if (prev !== undefined && prev !== 'hidden' && prev.x === placement.x && prev.y === placement.y) {
+    return
+  }
+  badge.style.transform = `translate(${placement.x}px, ${placement.y}px)`
+  appliedOverlayPlacements.set(badge, placement)
+}
+
 export function dropIndicatorStyle(target: CanvasDropTarget): CSSProperties {
   if (target.position === 'inside') return rectStyle(target.rect)
   return lineStyle(target.rect, target.position, target.axis)

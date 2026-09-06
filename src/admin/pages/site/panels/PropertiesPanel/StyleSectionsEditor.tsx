@@ -15,15 +15,22 @@
 import type { CSSPropertyBag } from '@core/page-tree'
 import { ClassPropertyRow } from './ClassPropertyRow'
 import { Section } from '@ui/components/Section'
+import { ControlRow } from '@ui/components/ControlRow'
 import { SpacingBoxControl } from './SpacingBoxControl/SpacingBoxControl'
-import { BorderControl } from './BorderControl/BorderControl'
+import { SpacingOverlayToggle } from './SpacingBoxControl/SpacingOverlayToggle'
 import { CustomPropertiesSection } from './CustomPropertiesSection'
 import { LayoutSection } from './LayoutSection'
 import { PositionSection } from './PositionSection'
+import { SectionAddMenu } from './SectionAddMenu'
+import { EffectsSection } from './EffectsSection'
+import { EffectAddMenu } from './EffectAddMenu'
+import { SizeSection } from './SizeSection'
+import { StylesSection } from './StylesSection'
+import { TypographySection } from './TypographySection'
 import {
-  CLASS_STYLE_SECTIONS,
+  getOrderedStyleSections,
+  SECTION_ADDABLE_PROPERTIES,
   cssPropertyLabel,
-  getCSSPropertyDefaultValue,
   type ClassStyleSectionDefinition,
 } from './cssControlTypes'
 import { hasStyleValue } from './styleValueUtils'
@@ -34,7 +41,17 @@ import sectionStyles from '@ui/components/Section/Section.module.css'
 const SPACING_SECTION_ID = 'spacing'
 const LAYOUT_SECTION_ID = 'layout'
 const POSITION_SECTION_ID = 'position'
-const BORDER_SECTION_ID = 'border'
+const STYLES_SECTION_ID = 'styles'
+const TYPOGRAPHY_SECTION_ID = 'typography'
+const EFFECTS_SECTION_ID = 'effects'
+const SIZE_SECTION_ID = 'size'
+
+/**
+ * Sections with NO curated standing rows — their whole body arrives through
+ * the header's "+". While empty they refuse to open (there is nothing to
+ * show); the first added row opens them.
+ */
+const ADD_ONLY_SECTION_IDS = new Set([EFFECTS_SECTION_ID, 'transforms', 'interaction'])
 
 // ---------------------------------------------------------------------------
 // Props
@@ -49,6 +66,8 @@ interface StyleSectionsEditorProps {
   sectionKey: string
   /** Search query — filters visible properties across all categories. */
   styleQuery: string
+  /** Text element selected — Typography hoists to the front of the order. */
+  typographyFirst?: boolean
   onChange: (property: keyof CSSPropertyBag, value: string | number | undefined) => void
   /** Applies several properties in one store commit (one undo entry). */
   onChangeMany: (patch: Partial<CSSPropertyBag>) => void
@@ -69,6 +88,7 @@ export function StyleSectionsEditor({
   currentStyles,
   sectionKey,
   styleQuery,
+  typographyFirst = false,
   onChange,
   onChangeMany,
   onRemove,
@@ -77,7 +97,7 @@ export function StyleSectionsEditor({
   onPreview,
   onClearPreview,
 }: StyleSectionsEditorProps) {
-  const visibleStyleSections = getVisibleStyleSections(styleQuery)
+  const visibleStyleSections = getVisibleStyleSections(styleQuery, typographyFirst)
 
   // Default open/closed state for every section, from the user preference.
   const sectionsExpanded = useEditorPreference('propertiesSectionsExpanded')
@@ -157,7 +177,17 @@ function StyleSectionGroup({
   onPreview,
   onClearPreview,
 }: StyleSectionGroupProps) {
-  const setCount = section.properties.filter((prop) => hasStyleValue(storedStyles[prop])).length
+
+  // The add-menu lists only what can still be ADDED: the section's long tail
+  // (no standing curated row), from the full catalog — never the search-
+  // narrowed list, and never properties that already hold a value.
+  const addableProperties = SECTION_ADDABLE_PROPERTIES.get(section.id)
+
+  // Add-only sections lock closed while empty; the keyed remount below
+  // re-initialises the open state, so the first added row opens the section
+  // and clearing the last one collapses it again.
+  const isAddOnly = ADD_ONLY_SECTION_IDS.has(section.id)
+  const isEmpty = isAddOnly && !section.properties.some((prop) => hasStyleValue(storedStyles[prop]))
 
   // Per-property adapter over the patch-shaped section preview channel.
   const previewProperty = (
@@ -167,25 +197,51 @@ function StyleSectionGroup({
 
   return (
     <Section
+      key={isAddOnly ? `add-only-${isEmpty}` : undefined}
       title={section.title}
-      icon={section.icon}
-      defaultOpen={defaultOpen}
+      defaultOpen={isAddOnly ? !isEmpty : defaultOpen}
+      collapsible={!isEmpty}
       flush
-      indicator={setCount > 0}
-      indicatorTestId={`class-style-section-dot-${section.id}`}
-      meta={setCount > 0 ? `${setCount} set` : undefined}
+      /* `.sec-head` is caret · name · "+" and nothing else
+         (docs/features/inspector-panel.md §3). The set-signal lives where it
+         is actionable: a dot on each set row, and one on the rail category. */
+      headerAction={
+        /* Effects adds an EFFECT, not a CSS property — its "+" opens its own
+           catalogue (docs/features/inspector-panel.md §7.6). */
+        section.id === EFFECTS_SECTION_ID ? (
+          <EffectAddMenu storedStyles={storedStyles} onChange={onChange} />
+        ) : section.id === SPACING_SECTION_ID ? (
+          /* Spacing has nothing to add — its slot pins the canvas overlay. */
+          <SpacingOverlayToggle />
+        ) : addableProperties ? (
+          <SectionAddMenu
+            sectionTitle={section.title}
+            properties={addableProperties}
+            storedStyles={storedStyles}
+            onChange={onChange}
+          />
+        ) : null
+      }
     >
       <div className={sectionStyles.sectionBody}>
         {section.id === SPACING_SECTION_ID ? (
-          <SpacingBoxControl
-            key={activeTab}
-            storedStyles={storedStyles}
-            currentStyles={currentStyles}
-            onChange={onChange}
-            onRemove={onRemove}
-            onPreview={onPreview}
-            onClearPreview={onClearPreview}
-          />
+          /* The mock's Spacing row: label beside the box while it fits,
+             box wrapping under it in a narrow dock. */
+          <ControlRow
+            label="Spacing"
+            wide
+            isSet={section.properties.some((prop) => hasStyleValue(storedStyles[prop]))}
+          >
+            <SpacingBoxControl
+              key={activeTab}
+              storedStyles={storedStyles}
+              currentStyles={currentStyles}
+              onChange={onChange}
+              onRemove={onRemove}
+              onPreview={onPreview}
+              onClearPreview={onClearPreview}
+            />
+          </ControlRow>
         ) : section.id === LAYOUT_SECTION_ID ? (
           <LayoutSection
             key={activeTab}
@@ -196,6 +252,18 @@ function StyleSectionGroup({
             onRemove={onRemove}
             onClearProperty={onClearProperty}
             onClearProperties={onClearProperties}
+            onPreview={onPreview}
+            onClearPreview={onClearPreview}
+          />
+        ) : section.id === SIZE_SECTION_ID ? (
+          <SizeSection
+            key={activeTab}
+            storedStyles={storedStyles}
+            currentStyles={currentStyles}
+            activeTab={activeTab}
+            onChange={onChange}
+            onChangeMany={onChangeMany}
+            onRemove={onRemove}
             onPreview={onPreview}
             onClearPreview={onClearPreview}
           />
@@ -211,54 +279,65 @@ function StyleSectionGroup({
             onPreview={onPreview}
             onClearPreview={onClearPreview}
           />
-        ) : section.id === BORDER_SECTION_ID ? (
-          <>
-            <BorderControl
-              key={activeTab}
-              storedStyles={storedStyles}
-              currentStyles={currentStyles}
-              onChange={onChange}
-              onClearProperty={onClearProperty}
-              onPreview={onPreview}
-              onClearPreview={onClearPreview}
-            />
-            <AdvancedRows
-              activeTab={activeTab}
-              properties={BORDER_ADVANCED_PROPERTIES}
-              storedStyles={storedStyles}
-              currentStyles={currentStyles}
-              onChange={onChange}
-              onRemove={onRemove}
-              onPreview={previewProperty}
-              onClearPreview={onClearPreview}
-            />
-          </>
+        ) : section.id === STYLES_SECTION_ID ? (
+          <StylesSection
+            key={activeTab}
+            storedStyles={storedStyles}
+            currentStyles={currentStyles}
+            activeTab={activeTab}
+            visibleProperties={section.properties}
+            onChange={onChange}
+            onChangeMany={onChangeMany}
+            onRemove={onRemove}
+            onClearProperty={onClearProperty}
+            onPreview={onPreview}
+            onClearPreview={onClearPreview}
+          />
+        ) : section.id === EFFECTS_SECTION_ID ? (
+          <EffectsSection
+            key={activeTab}
+            storedStyles={storedStyles}
+            activeTab={activeTab}
+            visibleProperties={section.properties}
+            onChange={onChange}
+            onRemove={onRemove}
+            onPreview={onPreview}
+            onClearPreview={onClearPreview}
+          />
+        ) : section.id === TYPOGRAPHY_SECTION_ID ? (
+          <TypographySection
+            key={activeTab}
+            storedStyles={storedStyles}
+            currentStyles={currentStyles}
+            activeTab={activeTab}
+            visibleProperties={section.properties}
+            onChange={onChange}
+            onRemove={onRemove}
+            onPreview={onPreview}
+            onClearPreview={onClearPreview}
+          />
         ) : (
-          section.properties.map((prop) => {
-            const storedValue = storedStyles[prop]
-            const isSet = hasStyleValue(storedValue)
-            const currentValue = currentStyles[prop]
-            const fallbackValue = hasStyleValue(currentValue)
-              ? currentValue
-              : getCSSPropertyDefaultValue(prop)
-
-            return (
+          /* Generic sections (Transforms, Interaction): EMPTY until the user
+             adds a property from the header's "+" — a row exists only while
+             its property holds a value, and carries the remove handle. */
+          section.properties
+            .filter((prop) => hasStyleValue(storedStyles[prop]))
+            .map((prop) => (
               <ClassPropertyRow
                 key={`${activeTab}-${String(prop)}`}
                 property={prop}
-                value={isSet ? (storedValue as string | number) : undefined}
-                placeholder={!isSet ? fallbackValue : undefined}
+                value={storedStyles[prop] as string | number}
                 fontFamilyValue={currentStyles.fontFamily}
                 backgroundImageValue={currentStyles.backgroundImage}
-                isSet={isSet}
+                isSet
+                removable
                 onChange={onChange}
                 onChangeMany={onChangeMany}
                 onRemove={onRemove}
                 onPreview={previewProperty}
                 onClearPreview={onClearPreview}
               />
-            )
-          })
+            ))
         )}
       </div>
     </Section>
@@ -266,85 +345,16 @@ function StyleSectionGroup({
 }
 
 // ---------------------------------------------------------------------------
-// Border advanced rows — raw CSS shorthand props the visual BorderControl
-// deliberately doesn't surface, kept available behind a disclosure.
-// ---------------------------------------------------------------------------
-
-const BORDER_ADVANCED_PROPERTIES: ReadonlyArray<keyof CSSPropertyBag> = [
-  'border',
-  'borderTop',
-  'borderRight',
-  'borderBottom',
-  'borderLeft',
-  'borderWidth',
-  'borderStyle',
-  'borderColor',
-  'borderRadius',
-  'appearance',
-]
-
-interface AdvancedRowsProps {
-  activeTab: string
-  properties: ReadonlyArray<keyof CSSPropertyBag>
-  storedStyles: Record<string, unknown>
-  currentStyles: Record<string, unknown>
-  onChange: (property: keyof CSSPropertyBag, value: string | number | undefined) => void
-  onRemove: (property: keyof CSSPropertyBag) => void
-  onPreview?: (property: keyof CSSPropertyBag, value: string | number | undefined) => void
-  onClearPreview?: () => void
-}
-
-function AdvancedRows({
-  activeTab,
-  properties,
-  storedStyles,
-  currentStyles,
-  onChange,
-  onRemove,
-  onPreview,
-  onClearPreview,
-}: AdvancedRowsProps) {
-  const anySet = properties.some((prop) => hasStyleValue(storedStyles[prop]))
-
-  return (
-    <details className={styles.advanced} open={anySet}>
-      <summary className={styles.advancedSummary}>Advanced</summary>
-      <div className={styles.advancedBody}>
-        {properties.map((prop) => {
-          const storedValue = storedStyles[prop]
-          const isSet = hasStyleValue(storedValue)
-          const currentValue = currentStyles[prop]
-          const fallbackValue = hasStyleValue(currentValue)
-            ? currentValue
-            : getCSSPropertyDefaultValue(prop)
-          return (
-            <ClassPropertyRow
-              key={`${activeTab}-${String(prop)}`}
-              property={prop}
-              value={isSet ? (storedValue as string | number) : undefined}
-              placeholder={!isSet ? fallbackValue : undefined}
-              fontFamilyValue={currentStyles.fontFamily}
-              isSet={isSet}
-              onChange={onChange}
-              onRemove={onRemove}
-              onPreview={onPreview}
-              onClearPreview={onClearPreview}
-            />
-          )
-        })}
-      </div>
-    </details>
-  )
-}
-
-// ---------------------------------------------------------------------------
 // Section filtering by search query
 // ---------------------------------------------------------------------------
 
-function getVisibleStyleSections(query: string): ReadonlyArray<ClassStyleSectionDefinition> {
+function getVisibleStyleSections(
+  query: string,
+  typographyFirst: boolean,
+): ReadonlyArray<ClassStyleSectionDefinition> {
   const normalizedQuery = query.trim().toLowerCase()
 
-  return CLASS_STYLE_SECTIONS.map((section) => ({
+  return getOrderedStyleSections(typographyFirst).map((section) => ({
     ...section,
     properties: section.properties.filter(
       (prop) =>

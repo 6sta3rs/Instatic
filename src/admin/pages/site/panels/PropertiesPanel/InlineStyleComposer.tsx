@@ -7,8 +7,11 @@
  *
  * Inline styles are BASE-ONLY — a real HTML `style=""` attribute cannot be
  * media-queried — so this editor ignores the breakpoint / condition switcher
- * entirely and always edits the single inline bag (sectionKey `'base'`). The
- * canvas hover-preview channel is class-keyed, so preview is a no-op here.
+ * entirely and always edits the single inline bag (sectionKey `'base'`).
+ * Live preview (typing, sliders, chip hover) goes through
+ * `previewInlineStyles`, the inline sibling of the class preview channel:
+ * `NodeRenderer` overlays it on the node's stored bag, so the canvas follows
+ * every keystroke instead of waiting for the blur that commits.
  */
 
 import { useEditorStore } from '@site/store/store'
@@ -24,13 +27,23 @@ interface InlineStyleComposerProps {
   inlineStyles: Record<string, unknown> | undefined
   /** Search query — filters visible properties across all categories. */
   styleQuery: string
+  /** Text element selected — Typography hoists to the front of the order. */
+  typographyFirst?: boolean
 }
 
-export function InlineStyleComposer({ nodeId, inlineStyles, styleQuery }: InlineStyleComposerProps) {
+export function InlineStyleComposer({ nodeId, inlineStyles, styleQuery, typographyFirst }: InlineStyleComposerProps) {
   const setNodeInlineStyles = useEditorStore((s) => s.setNodeInlineStyles)
   const removeNodeInlineStyleProperty = useEditorStore((s) => s.removeNodeInlineStyleProperty)
+  const setPreviewInlineStyles = useEditorStore((s) => s.setPreviewInlineStyles)
+  const clearPreviewInlineStyles = useEditorStore((s) => s.clearPreviewInlineStyles)
 
-  const stored: Record<string, unknown> = inlineStyles ?? EMPTY_STYLES
+  // Same gesture-preview overlay as StyleRuleComposer — canvas drags echo
+  // their live values here so the fields follow instead of jumping at release.
+  const gesturePreview = useEditorStore((s) => s.canvasGesturePreview)
+  const storedBase: Record<string, unknown> = inlineStyles ?? EMPTY_STYLES
+  const stored: Record<string, unknown> = gesturePreview
+    ? { ...storedBase, ...gesturePreview }
+    : storedBase
 
   const handleChange = (key: keyof CSSPropertyBag, value: string | number | undefined) => {
     setNodeInlineStyles(nodeId, { [String(key)]: value ?? null })
@@ -57,16 +70,14 @@ export function InlineStyleComposer({ nodeId, inlineStyles, styleQuery }: Inline
       currentStyles={stored}
       sectionKey="base"
       styleQuery={styleQuery}
+      typographyFirst={typographyFirst}
       onChange={handleChange}
       onChangeMany={handleChangeMany}
       onRemove={handleRemove}
       onClearProperty={handleRemove}
       onClearProperties={handleClearProperties}
-      // Hover-preview is class-keyed in the store; skip it for inline editing.
-      onPreview={noop}
-      onClearPreview={noop}
+      onPreview={(patch) => setPreviewInlineStyles({ nodeId, styles: patch })}
+      onClearPreview={() => clearPreviewInlineStyles(nodeId)}
     />
   )
 }
-
-function noop() {}

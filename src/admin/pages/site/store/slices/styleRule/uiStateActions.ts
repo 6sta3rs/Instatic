@@ -17,10 +17,13 @@ type UiStateActions = Pick<
   StyleRuleSlice,
   | 'setActiveClass'
   | 'setInlineStyleEditing'
+  | 'setGradientPickerOpen'
   | 'setPreviewNodeClass'
   | 'clearPreviewNodeClass'
   | 'setPreviewClassStyles'
   | 'clearPreviewClassStyles'
+  | 'setPreviewInlineStyles'
+  | 'clearPreviewInlineStyles'
 >
 
 export function createUiStateActions({ set, get }: SiteSliceHelpers): UiStateActions {
@@ -44,6 +47,13 @@ export function createUiStateActions({ set, get }: SiteSliceHelpers): UiStateAct
       set((s) => {
         s.inlineStyleEditing = active
         if (active) s.activeClassId = null
+      })
+    },
+
+    setGradientPickerOpen(open) {
+      if (get().gradientPickerOpen === open) return
+      set((s) => {
+        s.gradientPickerOpen = open
       })
     },
 
@@ -86,6 +96,29 @@ export function createUiStateActions({ set, get }: SiteSliceHelpers): UiStateAct
       if (classId !== undefined && current.classId !== classId) return
       set((s) => {
         s.previewClassStyles = null
+      })
+    },
+
+    setPreviewInlineStyles(preview) {
+      const current = get().previewInlineStyles
+      if (
+        current &&
+        current.nodeId === preview.nodeId &&
+        shallowEqualStyles(current.styles, preview.styles)
+      ) {
+        return
+      }
+      set((s) => {
+        s.previewInlineStyles = preview
+      })
+    },
+
+    clearPreviewInlineStyles(nodeId) {
+      const current = get().previewInlineStyles
+      if (!current) return
+      if (nodeId !== undefined && current.nodeId !== nodeId) return
+      set((s) => {
+        s.previewInlineStyles = null
       })
     },
   }

@@ -42,6 +42,7 @@ import { MultiSelectionHeader } from './MultiSelectionInspector'
 import { MultiSelectorHeader } from './MultiSelectorInspector'
 import { type ClassPickerHandle } from './ClassPicker'
 import { useEditorStore } from '@site/store/store'
+import { getNodeHtmlTag } from '@core/page-tree'
 import { PanelHeader, PanelModeButton } from '@admin/shared/PanelHeader'
 import {
   PanelResizeHandle,
@@ -126,7 +127,7 @@ export function PropertiesPanel({ variant = 'floating' }: PropertiesPanelProps) 
   // ── Module tab content — pre-rendered, passed to StyleSurface as a ReactNode.
   // The dispatch lives in `renderModuleTabContent` (own file) to keep this
   // shell flat — see that helper for the per-branch rationale.
-  const moduleTabContent: React.ReactNode = renderModuleTabContent({
+  const moduleTabArgs = {
     selectedNode: data.selectedNode,
     selectedNodeId: data.selectedNodeId,
     definition: data.definition,
@@ -141,7 +142,8 @@ export function PropertiesPanel({ variant = 'floating' }: PropertiesPanelProps) 
     handlePatch: data.handlePatch,
     onSetDynamicBinding: data.handleSetDynamicBinding,
     onClearDynamicBinding: data.handleClearDynamicBinding,
-  })
+  }
+  const moduleTabContent: React.ReactNode = renderModuleTabContent(moduleTabArgs)
 
   return (
     <aside
@@ -161,6 +163,9 @@ export function PropertiesPanel({ variant = 'floating' }: PropertiesPanelProps) 
           : undefined
       }
       className={cn(styles.panel, variant === 'docked' && styles.panelDocked)}
+      // Docked: inherits the chrome ramp from the sidebar shell. Floating: a
+      // --bg-surface card, so its fields take the card ramp.
+      data-surface={variant === 'docked' ? undefined : 'card'}
     >
       {/* ─── Screen-reader live region (Guideline #331) ─────────────────── */}
       <div role="status" aria-live="polite" className={styles.srLiveRegion}>
@@ -293,6 +298,7 @@ function HeaderTitleContent({
         nodeId={selectedNodeId}
         label={selectedNode.label}
         moduleName={definition.name}
+        htmlTag={getNodeHtmlTag(selectedNode, definition)}
         onRename={(label) => renameNode(selectedNodeId, label)}
       />
     )

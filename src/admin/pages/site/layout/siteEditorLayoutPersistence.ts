@@ -140,7 +140,7 @@ function deriveOpenLeftPanels(selection: SiteLayoutSelection): LeftSidebarPanelI
   })[panel])
 }
 
-export function siteLayoutFromSelection(
+function siteLayoutFromSelection(
   selection: SiteLayoutSelection,
 ): StoredWorkspaceLayout {
   const [

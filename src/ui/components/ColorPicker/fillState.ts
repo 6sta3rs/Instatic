@@ -19,7 +19,7 @@ import { formatGradient, parseGradient, type GradientKind } from './gradientMath
 
 export type FillMode = 'solid' | GradientKind
 
-export interface StopState {
+interface StopState {
   hsva: Hsva
   /** 0–1 along the gradient line. */
   pos: number
@@ -42,9 +42,15 @@ export function initialFill(value: string, gradients: boolean): FillState {
         hsva: rgbaToHsva(stop.color),
         pos: stop.pos,
       }))
-      return { mode: gradient.kind, hsva: stops[0].hsva, stops, angle: gradient.angle }
+      return {
+        mode: gradient.kind,
+        hsva: stops[0].hsva,
+        stops,
+        angle: gradient.angle,
+      }
     }
   }
+  // Anything unparseable — including a stored `url(...)` — degrades to solid.
   const hsva = rgbaToHsva(parseColor(value) ?? BLACK)
   return { mode: 'solid', hsva, stops: defaultStops(hsva), angle: 180 }
 }

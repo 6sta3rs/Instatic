@@ -73,16 +73,41 @@
     --space-12xl: clamp(84px, calc(75.086px + 2.286vw), 108px);
 
     /* Surfaces */
-    --bg-body: #000000;
+    /* Inspector redesign: the editor chrome frame (topbar, sidebars, rails)
+       is a near-black #0d0d0e, not pure black — panels (#1b1b1b --bg-surface)
+       read as cards one step above it. */
+    --bg-body: #0d0d0e;
     --bg-surface: #1b1b1b;
-    --bg-surface-2: #282828;
-    --bg-surface-3: #323232;
-    --bg-surface-4: #4a4a4a;
+    /* Card ramp — fields standing on a --bg-surface card. The live
+       --bg-surface-2/3/4 and --border-* alias whichever ramp the nearest
+       [data-surface] picked (see "Surface ramps" below). */
+    --card-surface-2: #282828;
+    --card-surface-3: #323232;
+    --card-surface-4: #4a4a4a;
+    --card-line-subtle: #1f1f1f;
+    --card-line-muted: #2e2e2e;
+    --bg-surface-2: var(--card-surface-2);
+    --bg-surface-3: var(--card-surface-3);
+    --bg-surface-4: var(--card-surface-4);
     --bg-surface-5: #605f5f;
 
+    /* Chrome ramp (docs/features/inspector-panel.md §9). Controls standing
+       straight on the #0d0d0e chrome — sidebars, toolbar, floating popouts —
+       keep the ΔL* they were designed with one step lower than the card ramp
+       above. Applied wherever a shell stamps [data-surface="chrome"]; a card
+       with fields inside such a shell stamps [data-surface="card"] to get
+       the lighter ramp back. */
+    --panel-surface-2: #1b1b1b;
+    --panel-surface-3: #252525;
+    --panel-surface-4: #3c3c3c;
+    --panel-line-subtle: #121212;
+    --panel-line-muted: #212121;
+    /* One accent for every "set / active / picked" signal in the panel. */
+    --panel-accent: #0099ff;
+
     /* Borders */
-    --border-subtle: #1f1f1f;
-    --border-muted: #2e2e2e;
+    --border-subtle: var(--card-line-subtle);
+    --border-muted: var(--card-line-muted);
     --border: #333333;
     --border-strong: #4a4a4a;
 
@@ -200,6 +225,19 @@
     --input-radius: 1em;
     --tooltip-radius: 6px;
 
+    /* Control scale — one height set for every field, select, segment group
+       and popout trigger (inspector redesign, phase A1). Absolute radius:
+       --input-radius's 1em gives different corners at different font sizes. */
+    --control-height-sm: 24px;
+    --control-height: 30px;
+    --control-height-lg: 36px;
+    --control-row-gap: 10px;
+    --control-radius: 8px;
+    /* PropertyRow label column — every inspector row measures its label
+       track from this. ControlRow re-declares it (100px panel / 52px narrow)
+       to scope the narrow variant to its own subtree. */
+    --control-label-column: 100px;
+
     /* Scrollbars */
     --scrollbar-size: 6px;
     --scrollbar-radius: var(--radius-sm);
@@ -238,14 +276,21 @@
 
     /* Canvas */
     --canvas-chrome-shadow: 0 12px 28px var(--scrim-30);
-    --canvas-selection-ring: inset 0 0 0 1px #39ff14;
-    --canvas-hover-ring: inset 0 0 0 1px #ff2bd6;
+    /* Canvas accent — THE single source colour for every canvas affordance:
+       selection ring, hover outline, resize handles, dimension badge, smart
+       guides. Shares the inspector's --panel-accent so the editor has ONE
+       accent literal, defined once above; everything else derives via
+       color-mix, so a retint is a one-line change. */
+    --canvas-accent: var(--panel-accent);
+    --canvas-accent-60: color-mix(in srgb, var(--canvas-accent) 60%, transparent);
+    --canvas-selection-ring: inset 0 0 0 1px var(--canvas-accent);
+    --canvas-hover-ring: inset 0 0 0 1px var(--canvas-accent-60);
     /* Bare colours for surfaces that need an `outline` / `border-color` / or
        a custom box-shadow geometry rather than the full inset-ring shorthand
        above. Keep the two `*-color` tokens in sync with the shorthands so
        there's no drift. */
-    --canvas-selection-ring-color: #39ff14;
-    --canvas-hover-ring-color: #ff2bd6;
+    --canvas-selection-ring-color: var(--canvas-accent);
+    --canvas-hover-ring-color: var(--canvas-accent-60);
     --tree-drop-line: #5eead4;
     --tree-drop-line-shadow: rgba(94, 234, 212, 0.18);
     --tree-drop-inside-bg: rgba(94, 234, 212, 0.08);
@@ -260,6 +305,23 @@
        a selection. */
     --canvas-selector-ring: inset 0 0 0 1px #ff8800;
     --canvas-selector-ring-color: #ff8800;
+    /* Live spacing highlight: translucent bands drawn over the SELECTED
+       element's margin / padding while the inspector's Spacing box is being
+       interacted with (SpacingHighlightOverlay). DevTools-convention hues —
+       orange margin, green padding — kept translucent so the underlying
+       content stays readable. Distinct from the ring family above: these are
+       area fills, not 1px identity rings. */
+    /* Spacing bands are drawn as a diagonal hatch: the `-fill` is the stripe,
+       the `-wash` is the faint tint between stripes. */
+    --canvas-spacing-margin-fill: rgba(246, 178, 107, 0.42);
+    --canvas-spacing-padding-fill: rgba(147, 196, 125, 0.45);
+    --canvas-spacing-margin-wash: rgba(246, 178, 107, 0.14);
+    --canvas-spacing-padding-wash: rgba(147, 196, 125, 0.15);
+    /* Negative margin: drawn inside the edge it pulled past, in its own violet
+       so "took 20px away" never reads as "added 20px". */
+    --canvas-spacing-negative-fill: rgba(179, 136, 255, 0.46);
+    --canvas-spacing-negative-wash: rgba(179, 136, 255, 0.16);
+    --canvas-spacing-negative-text: #b388ff;
     /* Shared diagonal-stripe pattern used by every module's canvas empty
        state (image, video, content, loop, container, slot-outlet, VC ref
        placeholders). Strictly achromatic — colours derived from
@@ -389,14 +451,28 @@
     /* Surfaces */
     --bg-body: #e3e7ed;
     --bg-surface: #ffffff;
-    --bg-surface-2: #f6f7f9;
-    --bg-surface-3: #eceff3;
-    --bg-surface-4: #e1e5ea;
+    --card-surface-2: #f6f7f9;
+    --card-surface-3: #eceff3;
+    --card-surface-4: #e1e5ea;
+    --card-line-subtle: #eef0f3;
+    --card-line-muted: #dce1e7;
+    --bg-surface-2: var(--card-surface-2);
+    --bg-surface-3: var(--card-surface-3);
+    --bg-surface-4: var(--card-surface-4);
     --bg-surface-5: #d3d9e1;
 
+    /* Light theme has no separate chrome ramp — the card ladder already reads
+       correctly on #e3e7ed, so the panel tokens alias it. */
+    --panel-surface-2: var(--card-surface-2);
+    --panel-surface-3: var(--card-surface-3);
+    --panel-surface-4: var(--card-surface-4);
+    --panel-line-subtle: var(--card-line-subtle);
+    --panel-line-muted: var(--card-line-muted);
+    --panel-accent: #0369a1;
+
     /* Borders */
-    --border-subtle: #eef0f3;
-    --border-muted: #dce1e7;
+    --border-subtle: var(--card-line-subtle);
+    --border-muted: var(--card-line-muted);
     --border: #cbd3dc;
     --border-strong: #aeb8c5;
 
@@ -494,6 +570,28 @@
         transition-duration: 0.01ms !important;
         scroll-behavior: auto !important;
     }
+}
+
+/* Surface ramps — a field is always one step above whatever it stands on.
+   Shells standing on --bg-body (editor sidebars, toolbar, FloatingPanel)
+   stamp data-surface="chrome"; a --bg-surface card with fields inside one
+   of those shells stamps data-surface="card" to take the lighter ramp back.
+   Nothing else in the admin needs a stamp: the root already resolves to the
+   card ramp. */
+[data-surface='chrome'] {
+    --bg-surface-2: var(--panel-surface-2);
+    --bg-surface-3: var(--panel-surface-3);
+    --bg-surface-4: var(--panel-surface-4);
+    --border-subtle: var(--panel-line-subtle);
+    --border-muted: var(--panel-line-muted);
+}
+
+[data-surface='card'] {
+    --bg-surface-2: var(--card-surface-2);
+    --bg-surface-3: var(--card-surface-3);
+    --bg-surface-4: var(--card-surface-4);
+    --border-subtle: var(--card-line-subtle);
+    --border-muted: var(--card-line-muted);
 }
 
 /* Base reset */

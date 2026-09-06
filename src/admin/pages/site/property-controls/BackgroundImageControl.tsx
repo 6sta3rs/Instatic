@@ -47,6 +47,7 @@ import { ControlRow } from '@ui/components/ControlRow'
 import { SegmentedControl } from '@ui/components/SegmentedControl'
 import { Input } from '@ui/components/Input'
 import { ColorInput } from '@ui/components/ColorInput'
+import { useEditorStore } from '@site/store/store'
 import { MediaLibraryControl } from './MediaLibraryControl'
 import styles from './BackgroundImageControl.module.css'
 
@@ -106,6 +107,7 @@ export function BackgroundImageControl({
   disabled,
 }: BackgroundImageControlProps) {
   const cssValue = String(value ?? '')
+  const setGradientPickerOpen = useEditorStore((s) => s.setGradientPickerOpen)
   const [mode, setMode] = useState<BgImageMode | undefined>(() => detectMode(cssValue))
 
   // Resync with the external value when it changes from elsewhere (preset
@@ -152,51 +154,47 @@ export function BackgroundImageControl({
   const imageUrl = mode === 'image' ? extractUrlPayload(cssValue) : ''
 
   return (
-    <>
-      {/*
-       * Mode row — inline layout so it matches every other CSS property's
-       * row anatomy (100px label column + control column). The mode-specific
-       * body below sits OUTSIDE this row so it can take the full wrapper
-       * width without being clipped to the 1fr control column.
-       */}
-      <ControlRow
-        propKey={propKey}
-        label={label}
-        layout="inline"
-        isOverride={isOverride}
-        disabled={disabled}
-      >
+    /*
+     * `wide`: the whole image field (mode tabs + picker) lives in ONE control
+     * column beside the label and wraps under it when the dock is too narrow
+     * to give it a usable width — the mock's `.row:has(> .mediafield)`.
+     */
+    <ControlRow
+      propKey={propKey}
+      label={label}
+      wide
+      disabled={disabled}
+      isOverride={isOverride}
+    >
+      <div className={styles.imageField}>
         <SegmentedControl<BgImageMode>
           value={mode}
           options={MODE_OPTIONS}
           onChange={handleModeChange}
           onClear={handleClear}
           size="sm"
+          look="tiles"
           fullWidth
           disabled={disabled}
           aria-label={`${label ?? propKey} mode`}
         />
-      </ControlRow>
 
-      {mode === 'image' && (
-        <div className={styles.modeBody}>
+        {mode === 'image' && (
           <MediaLibraryControl
             propKey={`${propKey}-image-url`}
             value={imageUrl}
             onChange={handleImageUrlChange}
             // Empty label suppresses MediaLibraryControl's inner labelRow
-            // entirely — the parent row above already labels the whole control.
+            // entirely — the row's own label already names the whole control.
             label=""
             isOverride={isOverride}
             disabled={disabled}
             layout="stacked"
             mediaKind="image"
           />
-        </div>
-      )}
+        )}
 
-      {mode === 'custom' && (
-        <div className={styles.modeBody}>
+        {mode === 'custom' && (
           <div className={styles.customRow}>
             {/*
               The swatch opens the rich picker WITH its fill tabs, so a
@@ -210,6 +208,7 @@ export function BackgroundImageControl({
               value={cssValue}
               gradients
               disabled={disabled}
+              onOpenChange={setGradientPickerOpen}
               onValueChange={handleGradientChange}
               aria-label={`${label ?? propKey} gradient`}
               fieldSize="xs"
@@ -227,8 +226,8 @@ export function BackgroundImageControl({
               aria-label={`${label ?? propKey} custom CSS`}
             />
           </div>
-        </div>
-      )}
-    </>
+        )}
+      </div>
+    </ControlRow>
   )
 }

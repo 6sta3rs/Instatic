@@ -2,7 +2,7 @@
 
 The visual design system for Instatic — principles, tokens, surfaces, components.
 
-The design is a **two-layer color model**: an achromatic base (surfaces, borders, default text) with a deliberate semantic and categorical color layer on top (numbered accents for identity, state tokens for meaning, canvas neon for selection). Everything is tokenized in `src/styles/globals.css`. Every primitive lives in `src/ui/components/`.
+The design is a **two-layer color model**: an achromatic base (surfaces, borders, default text) with a deliberate semantic and categorical color layer on top (numbered accents for identity, state tokens for meaning, one canvas accent for selection). Everything is tokenized in `src/styles/globals.css`. Every primitive lives in `src/ui/components/`.
 
 ---
 
@@ -10,7 +10,7 @@ The design is a **two-layer color model**: an achromatic base (surfaces, borders
 
 - **Base is achromatic; color is the layer on top.** Surfaces, borders, and default text are neutral. Color is used to convey **identity** (`--accent-1..10`) and **state** (danger, warning, success, info, canvas selection / hover). Color is never decorative — every colored pixel carries meaning.
 - **Borderless tile cards.** Dashboard widgets and equivalent surfaces sit on a darker parent (`--bg-surface`) with a 1px grid gap, no border, `--card-radius` (16px). The gap reveals the parent and reads as a divider. Hover lifts the surface tone, never the border. Canonical implementation: `src/ui/components/Widget/Widget.module.css`.
-- **Bordered transparent inputs.** Inputs have a 1px white-alpha border, transparent background, and a pill 1em radius. Focus adds an inset achromatic glow.
+- **Borderless field fills.** Inputs, selects, and swatch triggers are filled tiles: `--bg-surface-2` on `--bg-surface`, hover lifts to `--bg-surface-3`, and a 1px `--overlay-30` border appears only on focus. `--control-radius` (8px) corners. Heights come from the shared control scale: `--control-height-sm` (24px) / `--control-height` (30px) / `--control-height-lg` (36px), mapped to the `FieldSize` tiers `xs`/`sm`/`md`.
 - **Floating overlay panels.** Spotlight, popovers, and modals use direct globals: `--bg-surface`, `--overlay-10`, `--panel-radius`, `--panel-blur`, and `--shadow-panel`.
 - **Editor controls** (toolbar buttons, chips) use `--radius` (6px) for default and `--radius-sm` (3px) for tight badges.
 - **Admin appearance is token-scoped.** Settings → Preferences stores `theme`, `density`, and `textScale` in `instatic-editor-prefs`; `useEditorAppearancePreferences()` mirrors them to `data-editor-theme`, `data-editor-density`, and `data-editor-text-scale` on the document and layout roots. Light mode and text scaling are token overrides, not per-component restyles.
@@ -25,7 +25,7 @@ The design is a **two-layer color model**: an achromatic base (surfaces, borders
 
 ### 1. The base disappears, the meaning appears
 
-The chrome is neutral and quiet so the user's content and the system's signals are the only things competing for attention. The default theme is dark; the light theme swaps the achromatic base tokens and remaps identity accents to foreground-safe variants while preserving the same hierarchy. Surfaces, borders, default text — all achromatic. Color is reserved for things that mean something: a green dot says "saved", a peach widget header says "this card is about posts", a neon ring says "the canvas selected this node".
+The chrome is neutral and quiet so the user's content and the system's signals are the only things competing for attention. The default theme is dark; the light theme swaps the achromatic base tokens and remaps identity accents to foreground-safe variants while preserving the same hierarchy. Surfaces, borders, default text — all achromatic. Color is reserved for things that mean something: a green dot says "saved", a peach widget header says "this card is about posts", an accent-blue ring says "the canvas selected this node".
 
 If a color isn't carrying information, it doesn't belong in the chrome.
 
@@ -35,7 +35,7 @@ If a color isn't carrying information, it doesn't belong in the chrome.
 ┌────────────────────────────────────────────────────────────────┐
 │  Layer 2 — SEMANTIC + CATEGORICAL COLOR                        │
 │  numbered identity accents, state (danger/warning/               │
-│  success/info), canvas neon (selection/hover)                  │
+│  success/info), canvas accent (selection/hover)                │
 ├────────────────────────────────────────────────────────────────┤
 │  Layer 1 — ACHROMATIC BASE                                     │
 │  --bg-body / --bg-surface / --bg-surface-2..5                    │
@@ -77,11 +77,11 @@ Parent surface  ── --bg-surface
 
 This is implemented by `Widget` (`src/ui/components/Widget/`) and `DashboardGrid` (`src/admin/pages/dashboard/components/DashboardGrid.module.css`). Use the same pattern for any equivalent tile surface.
 
-### 5. Inputs wear their borders. Cards don't.
+### 5. Fields are filled tiles. Borders mean focus.
 
-Inputs are the inverse of cards: transparent background with a 1px white-alpha border. Pill radius (1em ≈ 16px). On focus, an inset achromatic glow appears. The border is what defines the input; no fill.
+Inputs, selects, and swatch triggers are filled tiles one surface step above their panel: `--bg-surface-2` on `--bg-surface`. Hover lifts the fill to `--bg-surface-3`; a 1px `--overlay-30` border appears only on focus — at rest a field wears no border at all. Corners are `--control-radius` (8px), absolute rather than em-based so every control has the same corner regardless of font size.
 
-This split (cards = filled & borderless, inputs = unfilled & bordered) is the load-bearing visual distinction between containers and controls.
+Every field, select, segment group, and popout trigger sits on one shared height scale (`--control-height-sm` 24px / `--control-height` 30px / `--control-height-lg` 36px — the `FieldSize` tiers `xs`/`sm`/`md`), and inspector rows centre on the middle tier with a `--control-row-gap` (10px) rhythm.
 
 ### 6. Identity is a color, not a label
 
@@ -106,8 +106,10 @@ Accent tokens don't live in `src/styles/globals.css` to be decorative — they'r
 
 The canvas — where the user's page renders — has three chromatic rings used purely as affordance:
 
-- `--canvas-selection-ring` (neon green `#39ff14`) — node selected by the user
-- `--canvas-hover-ring` (neon pink `#ff2bd6`) — node hovered
+- `--canvas-selection-ring` (solid `--canvas-accent`) — node selected by the user
+- `--canvas-hover-ring` (60% `--canvas-accent`, drawn dashed) — node hovered
+
+Both derive from **`--canvas-accent`**, which itself aliases `--panel-accent` — the editor's single accent literal, defined once in `globals.css`. Resize handles, the dimension badge, and smart-guide hairlines use the same token.
 - `--canvas-selector-ring` (neon orange `#ff8800`) — match sweep when hovering a selector rule in the Selectors panel
 
 These are bright on purpose so they read against any user content, including content that itself uses the chrome palette.
@@ -173,8 +175,8 @@ Semantic state (meaning layer):
 
 Canvas (selection / hover affordances):
   --canvas-chrome-shadow           (shared shadow for canvas notch chrome)
-  --canvas-selection-ring          (inset 1px neon green)
-  --canvas-hover-ring              (inset 1px neon pink)
+  --canvas-selection-ring          (inset 1px canvas accent)
+  --canvas-hover-ring              (inset 1px 60% canvas accent)
   --canvas-selection-ring-color    (bare colour for outline / border-color)
   --canvas-hover-ring-color
   --canvas-placeholder-bg          (diagonal-stripe pattern for empty modules)
@@ -231,7 +233,8 @@ These are admin tokens. The published-site Framework engine also emits short spa
 | `--radius`    | 6px   | Default editor controls, toolbar buttons, ghost menu items   |
 | `--panel-radius`     | 12px  | Floating overlay panels (Spotlight, modals, popovers)        |
 | `--card-radius`      | 16px  | Borderless tile cards (Widget, dashboard cells, module inserter tiles) |
-| `--input-radius`     | 1em   | Pill-shaped inputs, classes / property chips                 |
+| `--input-radius`     | 1em   | Pill-shaped chips (classes / property chips) — no longer the field radius |
+| `--control-radius`   | 8px   | Fields, selects, segment groups, swatch triggers (absolute — 1em gave different corners at different font sizes) |
 | `--tooltip-radius`   | 6px   | Tooltips                                                     |
 
 Do not introduce ad-hoc radius values. Tile-card surfaces use `--card-radius`.
@@ -339,20 +342,20 @@ Floating panels are the only surface that uses a visible border + blur — they'
 
 ### 3. Inputs
 
-Bordered, transparent, pill-shaped:
+Borderless filled fields (the inspector recipe — one recipe for every field in the app):
 
 ```css
 .input {
-  background: transparent;              /* transparent */
-  border: 1px solid var(--overlay-20);    /* rgba(255,255,255,0.20) */
-  border-radius: var(--input-radius);       /* 1em */
+  background: var(--bg-surface-2);       /* field fill, one step above its surface */
+  border: 1px solid transparent;         /* the border only appears on focus */
+  border-radius: var(--control-radius);  /* 8px */
   color: var(--text);
 }
-.input:hover  { border-color: var(--overlay-30); }
-.input:focus  { border-color: var(--overlay-50); box-shadow: var(--shadow-input-focus); }
+.input:hover { background: var(--bg-surface-3); }   /* hover lifts the tone */
+.input:focus { background: var(--bg-surface-2); border-color: var(--overlay-30); }
 ```
 
-The border is the input's identity. Don't fill them. Don't square the corners.
+The fill is the input's identity — no resting border. `SearchBar` uses the same recipe with the magnifier icon inside the field. `SegmentedControl` speaks the same surface ladder: a `--bg-surface-2` track, `--bg-surface-3` segment hover, and a flat `--bg-surface-4` active segment — no shadows.
 
 ### 4. Panel rail (the colored sidebar)
 
@@ -399,7 +402,7 @@ Every interactive control in the admin and editor goes through a primitive from 
 | `Stack`              | Small flex layouts for host/admin and plugin UI.                            |
 | `Separator`          | Visual divider between sections.                                            |
 | `Section`            | Titled section block in panels.                                             |
-| `ControlRow`         | Standard label + control row in property panels.                            |
+| `ControlRow`         | The one label + control row anatomy in property panels (`isSet` accent dot, `narrow`/`wide` variants; `ControlRowLabel` for composite rows). |
 | `Card`               | Token-backed panel surface for grouped host/admin content.                  |
 | `ContextMenu`        | Right-click and `…` overflow menus.                                         |
 | `FilterBar`          | Compound filter row (type + folder + date + query).                         |

@@ -38,7 +38,7 @@ import {
   disableSchedulesNotReclaimedSince,
   getSchedule,
   insertScheduleRun,
-  listRecentRuns,
+  listRecentRunsForSchedules,
   pauseSchedule,
   resumeSchedule,
   selectDueSchedules,
@@ -225,7 +225,7 @@ describe('plugin scheduler — DB', () => {
         overlap: 'skip',
         maxDurationMs: 5000,
       })
-      // Cheap smoke check on insertScheduleRun + listRecentRuns plumbing.
+      // Cheap smoke check on insertScheduleRun + listRecentRunsForSchedules plumbing.
       for (let i = 0; i < 5; i++) {
         await insertScheduleRun(db, {
           id: `run-${i}`,
@@ -235,8 +235,8 @@ describe('plugin scheduler — DB', () => {
           triggeredBy: 'tick',
         })
       }
-      const recent = await listRecentRuns(db, 'test.sched', 'test.sched.noisy', 3)
-      expect(recent.length).toBe(3)
+      const recent = await listRecentRunsForSchedules(db, 'test.sched', ['test.sched.noisy'], 3)
+      expect(recent['test.sched.noisy'].length).toBe(3)
     } finally {
       await cleanup()
     }

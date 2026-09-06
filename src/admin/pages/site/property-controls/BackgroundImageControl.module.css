@@ -1,15 +1,15 @@
 /*
- * BackgroundImageControl — layout for the mode-specific body that hangs
- * below the inline "Background image: [None|Image|Gradient]" row.
- *
- * The body sits full-width inside ClassPropertyRow's wrapper (which has no
- * grid of its own) so it stretches past the 100px label column of the row
- * above. A small top margin separates it from the mode row visually.
+ * BackgroundImageControl — the row chrome (label column + wrapping control
+ * column) comes from the shared `ControlRow` in its `wide` variant. What is
+ * left here is the field's own interior: the mode tabs stacked above the
+ * picker / custom-CSS input.
  */
 
-.modeBody {
-    margin-top: var(--space-xs);
-    width: 100%;
+/* The mock's `.mediafield` column: mode tabs above the picker/tile. */
+.imageField {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3xs);
 }
 
 /* Custom mode: gradient swatch (opens the picker's fill tabs) + raw CSS. */
