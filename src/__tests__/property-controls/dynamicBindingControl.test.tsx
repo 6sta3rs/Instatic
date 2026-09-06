@@ -221,3 +221,46 @@ describe('dynamic binding controls', () => {
     })
   })
 })
+
+// ---------------------------------------------------------------------------
+// Affordance placement — a toggle's switch sits where the overlaid {} would
+// land, so for toggles the button gets its own line ABOVE the row.
+// ---------------------------------------------------------------------------
+
+describe('DynamicBindingControl affordance placement', () => {
+  function domOrder(first: Element, second: Element): 'before' | 'after' {
+    return first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING ? 'before' : 'after'
+  }
+
+  it('puts the bind button above a toggle instead of over its switch', () => {
+    render(
+      <DynamicBindingControl
+        propKey="visible"
+        label="Visible"
+        control={{ type: 'toggle', label: 'Visible' }}
+        onSet={() => {}}
+        onClear={() => {}}
+      >
+        <input type="checkbox" aria-label="Visible" />
+      </DynamicBindingControl>,
+    )
+    const button = screen.getByRole('button', { name: /bind visible/i })
+    expect(domOrder(button, screen.getByLabelText('Visible'))).toBe('before')
+  })
+
+  it('keeps the bind button after a text-like control (overlaid at its right edge)', () => {
+    render(
+      <DynamicBindingControl
+        propKey="alt"
+        label="Alt"
+        control={{ type: 'image', label: 'Alt' }}
+        onSet={() => {}}
+        onClear={() => {}}
+      >
+        <input aria-label="Alt" />
+      </DynamicBindingControl>,
+    )
+    const button = screen.getByRole('button', { name: /bind alt/i })
+    expect(domOrder(button, screen.getByLabelText('Alt'))).toBe('after')
+  })
+})

@@ -33,6 +33,19 @@
     opacity: 1;
 }
 
+/* Toggle variant: the {} takes its own line above the label + switch row,
+   right-aligned, so it never covers the switch knob. */
+.affordanceAbove {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4xs);
+}
+
+.affordanceAbove .affordanceBtn {
+    position: static;
+    align-self: flex-end;
+}
+
 .boundWrapper {
     display: grid;
     grid-template-columns: 100px 1fr;

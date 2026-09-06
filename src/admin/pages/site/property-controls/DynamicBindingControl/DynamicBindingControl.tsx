@@ -175,28 +175,41 @@ export function DynamicBindingControl({
   }
 
   // ── Unbound state — render children with BracesIcon affordance ──────────
+  // A toggle puts its switch at the row's right end — exactly where the
+  // overlaid {} would land — so for toggles the affordance gets its own line
+  // above the row instead of sitting on the knob.
+  const affordanceAbove = control.type === 'toggle'
+  const affordance = (
+    <Button
+      ref={triggerRef}
+      variant="ghost"
+      size="xs"
+      iconOnly
+      className={styles.affordanceBtn}
+      aria-label={insertMode ? `Insert binding for ${label}` : `Bind ${label}`}
+      aria-expanded={pickerOpen}
+      tooltip={insertMode ? 'Insert data token' : 'Bind to data field'}
+      onClick={() => setPickerOpen((o) => !o)}
+      type="button"
+    >
+      <BracesIcon size={11} aria-hidden="true" />
+    </Button>
+  )
+
   return (
     <>
       <div
         ref={wrapperRef}
-        className={cn(styles.affordanceWrapper, pickerOpen && styles.affordanceWrapperActive)}
+        className={cn(
+          styles.affordanceWrapper,
+          affordanceAbove && styles.affordanceAbove,
+          pickerOpen && styles.affordanceWrapperActive,
+        )}
         data-prop-key={propKey}
       >
+        {affordanceAbove && affordance}
         {children}
-        <Button
-          ref={triggerRef}
-          variant="ghost"
-          size="xs"
-          iconOnly
-          className={styles.affordanceBtn}
-          aria-label={insertMode ? `Insert binding for ${label}` : `Bind ${label}`}
-          aria-expanded={pickerOpen}
-          tooltip={insertMode ? 'Insert data token' : 'Bind to data field'}
-          onClick={() => setPickerOpen((o) => !o)}
-          type="button"
-        >
-          <BracesIcon size={11} aria-hidden="true" />
-        </Button>
+        {!affordanceAbove && affordance}
       </div>
 
       {pickerOpen && (
