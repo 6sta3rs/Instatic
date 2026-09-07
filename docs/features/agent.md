@@ -14,8 +14,10 @@ The agent runs on a provider-agnostic AI runtime (`server/ai/`) that can drive a
 
 - **Structure via HTML.** `site_insert_html` and `site_replace_node_html` accept semantic HTML strings; the browser executor calls `importHtml` (the same pipeline as the paste-HTML UI) to convert them into first-class, editable `PageNode`s.
 - **Styling via CSS.** The agent emits CSS the same way a human pastes it: a `<style>` block and/or `class=` attributes inside the `site_insert_html`/`site_replace_node_html` payload, or the standalone `site_apply_css` tool. The importer (`cssToStyleRules`) classifies every selector — class-bearing selectors become reusable Selectors-panel classes while preserving the full selector and decoded class token; class-free selectors (`a:hover`, `nav > li`) become ambient rules; `style=` attributes land on the node's inline styles. There is no structured `classes` parameter — the agent never hand-builds classes node-by-node at insert time. `site_apply_css` is the single tool for CSS on its own, with explicit merge, replace, rule-delete, and property-removal operations; exact selector identity and `!important` priority survive the round trip.
-- **Site scope: 40 tools total.** 6 server-side catalog read tools (resolved server-side from the posted snapshot / DB) + 34 browser-bridged tools.
-- **Content scope: 15 tools total.** 7 server-side content/catalog/media/user read tools + 8 browser-bridged document mutation/navigation tools.
+- **Site scope: 43 tools total.** 6 server-side catalog read tools (resolved server-side from the posted snapshot / DB) + 3 shared media tools + 34 browser-bridged tools.
+- **Content scope: 17 tools total.** 6 server-side content/catalog/user read tools + 3 shared media tools + 8 browser-bridged document mutation/navigation tools.
+- **Images come from the library or Unsplash, never from guessed URLs.** The shared media tools (`server/ai/tools/media/`) let either scope list the Media library (`media_list`), search Unsplash (`media_search_unsplash`), and import a photo through the same licence-compliant pipeline the Media page uses (`media_import_unsplash`). Search returns ids only — a usable `publicPath` exists only after import, which is what stores the credit and fires the download ping.
+- **A silent turn is an error.** The shared tool loop turns a round that produced neither text nor tool calls, or one the provider's output cap cut off (`finish_reason: length` / `stop_reason: max_tokens` / `response.incomplete`), into a stream error instead of ending the turn quietly. Mid-stream `{ error }` chunks from OpenAI-compatible gateways (OpenRouter's rate limits on free models) surface the same way.
 - **Two-endpoint bridge.** `POST /admin/api/ai/chat/:scope` opens an NDJSON stream. When the model calls a browser-bridged tool, the server emits `toolRequest`; the browser executor reads or mutates the live workspace and POSTs the `AiToolOutput` result to `POST /admin/api/ai/tool-result`.
 - **Provider-agnostic.** The runtime selects a driver (Anthropic, OpenAI, OpenRouter, Ollama, Custom Provider) from the conversation's configured credential.
 - **Site tool input schemas are a single source of truth** in `@core/ai` (`src/core/ai/toolSchemas.ts`). The server registry and browser executor import from that shared leaf. Most tools reuse the exact same schema object; `site_apply_css` deliberately advertises a flat provider object because Anthropic rejects root-level schema composition, then the executor validates the payload against the leaf's exact operation union. Gated by `ai-tool-input-object.test.ts`, `ai-tool-schema-ssot.test.ts`, and `ai-tools-typebox-only.test.ts`.
@@ -375,6 +377,16 @@ Resolved server-side from the posted `SiteAgentSnapshot` or the data repositorie
 | `site_list_loop_sources` | Loop source ids, source fields, order/filter options, and data-table field catalogs with valid `{currentEntry.field}` tokens. For post/custom table loops, use source id `data.rows`, the returned table `id` as `<instatic-loop data-table-id>`, and the returned tokens inside the loop body |
 | `site_list_tokens`     | Design tokens: colors (with shades/tints), typography/spacing scale steps, font tokens — each with CSS variable + utility classes; optional `family` filter (`colors`\|`typography`\|`spacing`\|`fonts`) |
 
+### Shared media tools — 3, server-side, in both scopes
+
+Defined once in `server/ai/tools/media/` (`scope: 'shared'`) and registered in both `siteTools` and `contentTools`; MCP connectors get them through the same arrays. They wrap the Media workspace's own primitives, so an agent import is indistinguishable from a picker import.
+
+| Tool | Capability | What it does |
+|---|---|---|
+| `media_list` | `media.read` | Existing assets (id, filename, `publicPath`, mimeType, altText, width, height); optional `query` / `mimeType` filters. `publicPath` is the `<img src>`; `{ id }` is the media-field value |
+| `media_search_unsplash` | `media.read` | Search Unsplash: up to 12 candidates per `page` with id, description, dimensions, photographer. Deliberately returns **no image URLs** — hotlinking would skip the attribution and download-tracking the licence requires. Fails with a message pointing at `media_list` when `UNSPLASH_ACCESS_KEY` is unset |
+| `media_import_unsplash` | `media.write` (+ `ai.tools.write`) | Import one photo by id through `importUnsplashPhoto` — the same function `POST /admin/api/cms/media/unsplash/import` runs (download ping, SSRF-guarded fetch, upload pipeline, credit line in `caption`). Returns the asset with its `publicPath` |
+
 ### Site browser tools — 34, browser-bridged
 
 All 34 tools carry `execution: 'browser'` in their `AiTool` definition. The server emits `toolRequest`; the browser executor validates input with TypeBox, runs the store action or read helper, and POSTs the canonical `AiToolOutput` result back.
@@ -530,9 +542,9 @@ Content-scope tools are registered under `server/ai/tools/content/`. They use th
 
 - `ContentAgentMount` builds a `ContentSnapshot` from the live Content workspace: visible `postType` collections, active collection id, active document fields/schema, and current user identity.
 - `contentAgentStore.ts` mounts a standalone `AgentSlice` instance per `ContentPage` mount. The Content workspace is hook-based rather than a global Zustand store, so the bridge is exposed through `contentBridgeHandle.ts`.
-- Server read tools hit the data, media, and user repositories through `ctx.db`; write tools are browser-bridged so unsaved draft state in `useContentEntryDraft` and the Tiptap body editor stay authoritative.
+- Server read tools hit the data and user repositories through `ctx.db`; write tools are browser-bridged so unsaved draft state in `useContentEntryDraft` and the Tiptap body editor stay authoritative. Media reads/imports are the shared media tools described under the Site section.
 
-**Server-side content reads — 7**
+**Server-side content reads — 6 (+ 3 shared media tools)**
 
 | Tool | What it returns |
 |---|---|
@@ -542,7 +554,7 @@ Content-scope tools are registered under `server/ai/tools/content/`. They use th
 | `content_get_document` | One document's full state: field values, status, author, slug, timestamps |
 | `content_search_documents` | Free-text lookup across document slugs, projected to light document summaries |
 | `content_list_users` | Active users available as authors; gated by `users.manage` |
-| `content_list_media` | Existing media assets for media fields; gated by `media.read`; upload remains a user/media-workspace action |
+| `media_list` / `media_search_unsplash` / `media_import_unsplash` | Shared media tools — see "Shared media tools" above. Arbitrary file upload remains a user/media-workspace action |
 
 **Browser-bridged content writes/navigation — 8**
 

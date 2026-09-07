@@ -83,9 +83,22 @@ describe('selectToolsForScope capability filtering', () => {
     expect(names).toContain('content_list_collections')
   })
 
-  it('drops list_media for a caller without media.read', () => {
-    const names = selectToolsForScope('content', ['ai.chat']).map((t) => t.name)
-    expect(names).not.toContain('content_list_media')
+  it('drops the media tools for a caller without media.read', () => {
+    for (const scope of ['content', 'site'] as const) {
+      const names = selectToolsForScope(scope, ['ai.chat']).map((t) => t.name)
+      expect(names).not.toContain('media_list')
+      expect(names).not.toContain('media_search_unsplash')
+    }
+  })
+
+  it('offers media_import_unsplash only with ai.tools.write + media.write, in both scopes', () => {
+    for (const scope of ['content', 'site'] as const) {
+      const readOnly = selectToolsForScope(scope, ['ai.chat', 'media.read', 'media.write']).map((t) => t.name)
+      expect(readOnly).toContain('media_list')
+      expect(readOnly).not.toContain('media_import_unsplash')
+      const writer = selectToolsForScope(scope, ['ai.chat', 'ai.tools.write', 'media.write']).map((t) => t.name)
+      expect(writer).toContain('media_import_unsplash')
+    }
   })
 
   it('still filters write tools by ai.tools.write (existing behaviour preserved)', () => {

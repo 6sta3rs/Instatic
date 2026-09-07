@@ -1,8 +1,8 @@
 /**
  * Content-scope read tools — server-resolved.
  *
- * Seven read tools that hit the data + media + user repositories directly
- * through `ctx.db`. None of them mutate; all results are shape-projected to
+ * Six read tools that hit the data + user repositories directly
+ * through `ctx.db` (media reads are the shared tools in `../media`). None of them mutate; all results are shape-projected to
  * compact "agent-friendly" rows so we don't blow up the context window with
  * fields the model doesn't need (user join columns, internal timestamps,
  * deleted-at sentinels, etc.).
@@ -21,7 +21,6 @@ import {
   listDataTablesWithCounts,
   searchDataRows,
 } from '../../../repositories/data'
-import { listMediaAssets } from '../../../repositories/media'
 import {
   readSlugCell,
   readTitleCell,
@@ -321,54 +320,7 @@ const listUsersTool: AiTool = {
 }
 
 // ---------------------------------------------------------------------------
-// content_list_media
-// ---------------------------------------------------------------------------
-
-const ListMediaInput = Type.Object({
-  query: Type.Optional(Type.String()),
-  mimeType: Type.Optional(Type.String()),
-  limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 100 })),
-})
-
-const listMediaTool: AiTool = {
-  name: 'content_list_media',
-  scope: 'content',
-  execution: 'server',
-  requiredCapabilities: ['media.read'],
-  description:
-    "List existing media assets so you can pick one for a media-typed field. Returns id, filename, publicPath, mimeType, altText, width, height. Optional `query` substring-matches filename + altText (case-insensitive); `mimeType` substring-matches the mime (e.g. 'image' to filter to images). `limit` default 25, max 100. To add a new image, use media_upload.",
-  inputSchema: ListMediaInput,
-  handler: async (input, ctx) => {
-    const args = input as Static<typeof ListMediaInput>
-    const all = await listMediaAssets(ctx.db)
-    const lowerQuery = args.query?.toLowerCase()
-    const lowerMime = args.mimeType?.toLowerCase()
-    const filtered = all.filter((asset) => {
-      if (lowerMime && !asset.mimeType.toLowerCase().includes(lowerMime)) return false
-      if (lowerQuery) {
-        const haystack = `${asset.filename ?? ''} ${asset.altText ?? ''}`.toLowerCase()
-        if (!haystack.includes(lowerQuery)) return false
-      }
-      return true
-    })
-    const limit = args.limit ?? 25
-    return {
-      total: filtered.length,
-      media: filtered.slice(0, limit).map((m) => ({
-        id: m.id,
-        filename: m.filename,
-        publicPath: m.publicPath,
-        mimeType: m.mimeType,
-        altText: m.altText,
-        width: m.width,
-        height: m.height,
-      })),
-    }
-  },
-}
-
-// ---------------------------------------------------------------------------
-// Barrel
+// Barrel — media reads live in `../media` (shared with the site scope).
 // ---------------------------------------------------------------------------
 
 export const contentReadTools: AiTool[] = [
@@ -378,5 +330,4 @@ export const contentReadTools: AiTool[] = [
   getDocumentTool,
   searchDocumentsTool,
   listUsersTool,
-  listMediaTool,
 ]

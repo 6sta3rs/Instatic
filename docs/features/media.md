@@ -380,6 +380,8 @@ The download itself goes through `remoteImageFetch.ts` — https-only, every red
 
 `unsplashClient.test.ts` pins both, because breaking either leaves the app working perfectly and silently out of compliance.
 
+**The AI agent uses the same import.** `importUnsplashPhoto` (in `mediaUnsplash.ts`) is the whole import minus the capability checks; the HTTP route and the agent's `media_import_unsplash` tool both call it, so an agent-fetched photo carries the same credit line and fires the same download ping. The agent's search tool (`media_search_unsplash`) returns ids and descriptions only — no hotlinkable URLs — so the only way for it to put an Unsplash photo on a page is through this import. See [agent.md](agent.md) → "Shared media tools".
+
 UI: `src/admin/pages/media/components/UnsplashPicker/`. One component, three entry points — the Media page toolbar (imports a new asset), the `MediaPickerModal` header (imports and immediately picks it, so "I need a photo" does not mean leaving the picker), and the viewer's `…` menu (opens it with a replace target). The grid opens on the editorial feed rather than an empty prompt, pages by `IntersectionObserver` sentinel, and debounces the search box at 350 ms.
 
 Imports request a 2400px-wide JPEG from Unsplash's dynamic resizer rather than the untouched original, which is routinely 6000px+ and tens of megabytes — more than any page needs and enough to make the variant ladder slow.

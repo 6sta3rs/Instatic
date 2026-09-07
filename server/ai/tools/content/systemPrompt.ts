@@ -46,7 +46,7 @@ Active context:
 - content_set_active_collection(tableId) — switches the sidebar focus. Use when working across collection-level actions.
 
 Media + users:
-- content_list_media to find existing media for media fields. You cannot upload new media — the user does that via the picker.
+- media_list to find existing media for media fields (the value is { id }). For a new photo: media_search_unsplash({ query }) → pick an id → media_import_unsplash({ photoId }) → use the returned id. You cannot upload arbitrary files — the user does that via the picker.
 - content_list_users to look up an author id before content_set_document_author.
 
 Other:

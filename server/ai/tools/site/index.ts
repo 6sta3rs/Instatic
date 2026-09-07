@@ -11,6 +11,7 @@
  */
 
 import type { AiTool } from '../types'
+import { mediaTools } from '../media'
 import { siteReadTools } from './readTools'
 import { siteWriteTools } from './writeTools'
 
@@ -33,8 +34,11 @@ function stampMutationFlag(tools: AiTool[], isMutating: boolean): AiTool[] {
   })
 }
 
+// The shared media tools (library list, Unsplash search/import) carry their
+// own `mutates` stamp.
 export const siteTools: AiTool[] = [
   ...stampMutationFlag(siteReadTools, false),
+  ...mediaTools,
   ...stampMutationFlag(siteWriteTools, true),
 ]
 

@@ -8,13 +8,16 @@
  */
 
 import type { AiTool } from '../types'
+import { mediaTools } from '../media'
 import { contentReadTools } from './readTools'
 import { contentWriteTools } from './writeTools'
 
 // Stamp the `mutates` flag so `selectToolsForScope` can filter write tools
-// out for callers without `ai.tools.write`. Read tools default to false.
+// out for callers without `ai.tools.write`. Read tools default to false; the
+// shared media tools carry their own stamp.
 export const contentTools: AiTool[] = [
   ...contentReadTools.map((t) => ({ ...t, mutates: false })),
+  ...mediaTools,
   ...contentWriteTools.map((t) => ({ ...t, mutates: true })),
 ]
 

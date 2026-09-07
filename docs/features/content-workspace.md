@@ -151,11 +151,12 @@ The Content workspace has its own `content` chat scope, mounted as the `agent` p
 
 `ContentAgentMount` creates a fresh per-page `AgentSlice` store (`contentAgentStore.ts`) for the visible chat panel. Independently, `ContentPage` always mounts `useContentToolBridge`, which registers a `ContentBridgeHandle` and the `content` MCP stream for as long as the workspace is open. The handle reads the current collections, selected entry, draft fields, schema, and current user via refs so either caller sees the same state the user sees. Tool writes go through that handle and then through `useContentWorkspace` / `useContentEntryDraft`, which keeps unsaved body/title/SEO/media changes and sidebar selection in sync. `content_set_active_document` loads an uncached row by id, switches across post-type collections without waiting for the target sidebar list, and commits the workspace and draft focus before it returns so an immediately following write targets the selected document.
 
-The server registers 15 content-scope tools:
+The server registers 17 content-scope tools:
 
 | Group | Tools |
 |---|---|
-| Server reads | `content_list_collections`, `content_get_collection_schema`, `content_list_documents`, `content_get_document`, `content_search_documents`, `content_list_users`, `content_list_media` |
+| Server reads | `content_list_collections`, `content_get_collection_schema`, `content_list_documents`, `content_get_document`, `content_search_documents`, `content_list_users` |
+| Shared media (server) | `media_list`, `media_search_unsplash`, `media_import_unsplash` — same tools as the Site scope, see [agent.md](agent.md) → "Shared media tools" |
 | Browser writes/navigation | `content_create_document`, `content_delete_document`, `content_set_document_status`, `content_set_document_field`, `content_set_document_fields`, `content_set_document_author`, `content_set_active_document`, `content_set_active_collection` |
 
 Body content is exchanged with the model as markdown. The browser bridge converts it to/from the Tiptap document when applying field writes, so the persisted `body` cell remains the same markdown source of truth used by the manual editor.

@@ -26,6 +26,7 @@ import {
 } from '../../../handlers/cms/mediaUpload'
 import { updateMediaAssetMetadata } from '../../../repositories/media'
 import { downloadRemoteMedia } from '../../../media/remoteDownload'
+import { mediaResponseErrorMessage } from '../../tools/media'
 
 const MAX_FILENAME_CHARS = 255
 const MAX_SOURCE_URL_CHARS = 2_048
@@ -150,13 +151,7 @@ export const uploadMediaMcpTool: AiTool = {
     // `acceptUploadedMedia` returns a ready-to-send error Response on any policy
     // failure. MCP has no HTTP surface, so surface the envelope message as a
     // thrown tool error instead.
-    if (result instanceof Response) {
-      const message = await result
-        .json()
-        .then((body: { error?: string }) => body.error)
-        .catch(() => null)
-      throw new Error(message ?? `Upload rejected (HTTP ${result.status}).`)
-    }
+    if (result instanceof Response) throw new Error(await mediaResponseErrorMessage(result))
 
     let asset = result
     if (args.altText !== undefined) {

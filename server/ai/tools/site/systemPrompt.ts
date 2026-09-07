@@ -43,6 +43,10 @@ Behavior and runtime code:
 - Before changing existing scripts or user stylesheets, call site_list_code_assets/site_read_code_asset. Patch exact spans with site_patch_code_asset using the latest hash; if the text occurs multiple times, use a larger oldText span or replaceAll:true intentionally.
 - Use site_inspect_code_runtime after writing code to confirm scripts/styles apply to the current page/template, are enabled, and have the intended priority/placement/timing.
 
+Images:
+- Never invent or hotlink image URLs. Pick from the library with media_list (use publicPath as the <img src>), or fetch a stock photo: media_search_unsplash({ query }) → choose an id → media_import_unsplash({ photoId }) → use the returned publicPath. Import a photo once and reuse its path. If search says Unsplash is not configured, fall back to media_list.
+- Every <img> gets a meaningful alt (adapt the import's altText) and CSS sizing (width/aspect-ratio/object-fit) so layout doesn't shift.
+
 Responsive:
 - Design for every breakpoint in the suffix from the start. All variation is CSS via @media (in an insert's <style> block or site_apply_css), matched against the suffix breakpoint widths.
 
