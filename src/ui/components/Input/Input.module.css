@@ -74,6 +74,25 @@
     resize: both;
 }
 
+/* Chromeless: a parent card (e.g. the AI composer) owns fill, focus ring, and
+   padding; the textarea contributes only its text box. */
+.textarea[data-chromeless] {
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    padding: var(--space-2xs) 0;
+    min-height: 0;
+}
+
+.textarea[data-chromeless]:hover,
+.textarea[data-chromeless]:focus,
+.textarea[data-chromeless]:focus-visible {
+    background: transparent;
+    box-shadow: none;
+    border: 0;
+    outline: none;
+}
+
 .invalid {
     border-color: var(--danger);
 }

@@ -1,0 +1,54 @@
+/* ConversationSwitcher — header title trigger + history menu rows. Dropdown
+   chrome comes from the shared ContextMenu primitive. */
+
+.switcherTrigger {
+  max-width: 100%;
+  min-width: 0;
+}
+
+.switcherLabel {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-s);
+  font-weight: 500;
+  color: var(--text);
+}
+
+.switcherChevron {
+  flex: 0 0 auto;
+  color: var(--text-subtle);
+}
+
+.historyItemTitle {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+/* Delete glyph is hidden until the row is hovered, focused, or active. */
+.historyItemDelete {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-inline-start: auto;
+  padding: var(--space-4xs);
+  border-radius: var(--radius-sm);
+  color: var(--text-subtle);
+  opacity: 0;
+  cursor: pointer;
+}
+
+.historyItem:hover .historyItemDelete,
+.historyItem:focus-within .historyItemDelete,
+.historyItem[aria-checked="true"] .historyItemDelete,
+.historyItemDelete:focus-visible {
+  opacity: 1;
+}
+
+.historyItemDelete:hover {
+  color: var(--danger);
+}

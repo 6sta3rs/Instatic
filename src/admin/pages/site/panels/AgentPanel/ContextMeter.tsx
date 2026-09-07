@@ -1,12 +1,14 @@
+/**
+ * ContextMeter — a small ring showing how much of the active model's context
+ * window is still free, with a tooltip carrying the exact counts, cumulative
+ * conversation billing, and the model's list rates.
+ */
+import type { CSSProperties } from 'react'
 import { useAgentStore } from '@admin/ai/useAgentStore'
-import { formatCost, formatNumber } from '@admin/ai/usageFormat'
+import { formatCompactTokens, formatCost, formatNumber, formatPerMTok } from '@admin/ai/usageFormat'
 import { Button } from '@ui/components/Button'
 import { Tooltip } from '@ui/components/Tooltip'
-import {
-  CONTEXT_METER_SEGMENT_COUNT,
-  getContextMeterMetrics,
-  type ContextMeterTone,
-} from './contextMeterMetrics'
+import { getContextMeterMetrics } from './contextMeterMetrics'
 import styles from './ContextMeter.module.css'
 
 interface ContextMeterProps {
@@ -19,37 +21,6 @@ interface ContextMeterProps {
     inputPerMTok: number
     outputPerMTok: number
   } | null
-}
-
-function compactTokens(tokens: number): string {
-  if (tokens >= 1_000_000) {
-    return `${Math.round((tokens / 1_000_000) * 10) / 10}M`
-  }
-  if (tokens >= 1000) return `${Math.round(tokens / 1000)}K`
-  return String(tokens)
-}
-
-function formatRate(value: number): string {
-  if (value === 0) return '$0'
-  const amount = value < 1 ? value.toFixed(2) : String(Math.round(value * 100) / 100)
-  return `$${amount}`
-}
-
-function toneLabel(tone: ContextMeterTone): string {
-  if (tone === 'healthy') return 'Comfortable'
-  if (tone === 'warning') return 'Getting full'
-  if (tone === 'danger') return 'Nearly full'
-  return 'Not measured'
-}
-
-function Segments({ filled }: { filled: number }) {
-  return Array.from({ length: CONTEXT_METER_SEGMENT_COUNT }, (_, index) => (
-    <span
-      key={index}
-      data-context-segment=""
-      data-filled={index < filled ? 'true' : 'false'}
-    />
-  ))
 }
 
 export function ContextMeter({ credentialId, modelId, windowTokens, pricing }: ContextMeterProps) {
@@ -76,66 +47,31 @@ export function ContextMeter({ credentialId, modelId, windowTokens, pricing }: C
 
   const details = (
     <div className={styles.details}>
-      <div className={styles.detailsHeader}>
-        <div>
-          <span className={styles.eyebrow}>Context remaining</span>
-          <strong className={styles.contextHeadline}>
-            {metrics.measured ? `${metrics.remainingPercentage}% available` : 'Waiting for a response'}
-          </strong>
-        </div>
-        <span className={styles.status} data-tone={metrics.tone}>
-          {toneLabel(metrics.tone)}
-        </span>
-      </div>
-
-      <div className={styles.detailsGauge} data-tone={metrics.tone} aria-hidden="true">
-        <Segments filled={metrics.filledSegments} />
-      </div>
-
-      <div className={styles.contextNumbers}>
-        {metrics.measured ? (
-          <>
-            <span>{compactTokens(metrics.usedTokens)} used</span>
-            <span>{compactTokens(metrics.remainingTokens)} available</span>
-          </>
-        ) : (
-          <>
-            <span>Updates after the next response</span>
-            <span>{compactTokens(windowTokens)} window</span>
-          </>
-        )}
-      </div>
-
-      <div className={styles.billingHeader}>
-        <span className={styles.eyebrow}>Conversation billing</span>
-        <strong>{formatCost(usage.costUsd)}</strong>
-      </div>
+      <strong className={styles.headline}>
+        {metrics.measured ? `${metrics.remainingPercentage}% available` : 'Waiting for a response'}
+      </strong>
+      <span className={styles.numbers}>
+        {metrics.measured
+          ? `${formatCompactTokens(metrics.usedTokens)} used · ${formatCompactTokens(metrics.remainingTokens)} available`
+          : `Updates after the next response · ${formatCompactTokens(windowTokens)} window`}
+      </span>
+      <span className={styles.billing}>
+        Conversation billing <strong>{formatCost(usage.costUsd)}</strong>
+      </span>
       <dl className={styles.usageGrid}>
-        <div>
-          <dt>Input</dt>
-          <dd>{formatNumber(usage.promptTokens)}</dd>
-        </div>
-        <div>
-          <dt>Output</dt>
-          <dd>{formatNumber(usage.completionTokens)}</dd>
-        </div>
-        <div>
-          <dt>Cache read</dt>
-          <dd>{formatNumber(usage.cacheReadTokens)}</dd>
-        </div>
-        <div>
-          <dt>Cache write</dt>
-          <dd>{formatNumber(usage.cacheCreationTokens)}</dd>
-        </div>
+        <dt>Input</dt>
+        <dd>{formatNumber(usage.promptTokens)}</dd>
+        <dt>Output</dt>
+        <dd>{formatNumber(usage.completionTokens)}</dd>
+        <dt>Cache read</dt>
+        <dd>{formatNumber(usage.cacheReadTokens)}</dd>
+        <dt>Cache write</dt>
+        <dd>{formatNumber(usage.cacheCreationTokens)}</dd>
       </dl>
-
       {pricing && (
-        <div className={styles.pricing}>
-          <span>Current model · per 1M tokens</span>
-          <strong>
-            {formatRate(pricing.inputPerMTok)} in · {formatRate(pricing.outputPerMTok)} out
-          </strong>
-        </div>
+        <span className={styles.pricing}>
+          {formatPerMTok(pricing.inputPerMTok)} in · {formatPerMTok(pricing.outputPerMTok)} out · per 1M tokens
+        </span>
       )}
     </div>
   )
@@ -147,12 +83,10 @@ export function ContextMeter({ credentialId, modelId, windowTokens, pricing }: C
         size="xs"
         className={styles.meter}
         data-tone={metrics.tone}
-        data-filled-segments={metrics.filledSegments}
+        style={{ '--meter-fill': metrics.remainingPercentage ?? 100 } as CSSProperties}
         aria-label={`AI context remaining: ${valueText}`}
       >
-        <span className={styles.battery} aria-hidden="true">
-          <Segments filled={metrics.filledSegments} />
-        </span>
+        <span className={styles.ring} aria-hidden="true" />
       </Button>
     </Tooltip>
   )

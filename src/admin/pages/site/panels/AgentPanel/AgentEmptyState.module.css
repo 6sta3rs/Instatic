@@ -1,0 +1,11 @@
+.emptyIcon {
+  color: var(--text-disabled);
+}
+
+.settingsButtonHeader {
+  color: var(--text-muted);
+}
+
+.settingsButtonInline {
+  color: var(--warning-text);
+}

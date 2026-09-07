@@ -1,5 +1,3 @@
-export const CONTEXT_METER_SEGMENT_COUNT = 5
-
 export type ContextMeterTone = 'empty' | 'healthy' | 'warning' | 'danger'
 
 export interface ContextMeterMetrics {
@@ -9,11 +7,10 @@ export interface ContextMeterMetrics {
   usedPercentage: number | null
   remainingPercentage: number | null
   progressValue: number
-  filledSegments: number
   tone: ContextMeterTone
 }
 
-/** Turn a current-context snapshot into the compact five-segment UI state. */
+/** Turn a current-context snapshot into the ring meter's UI state. */
 export function getContextMeterMetrics(
   usedTokens: number | null,
   windowTokens: number,
@@ -23,9 +20,6 @@ export function getContextMeterMetrics(
   const usedRatio = safeUsed / windowTokens
   const remainingTokens = Math.max(0, windowTokens - safeUsed)
   const remainingRatio = remainingTokens / windowTokens
-  const filledSegments = measured
-    ? Math.ceil(remainingRatio * CONTEXT_METER_SEGMENT_COUNT)
-    : CONTEXT_METER_SEGMENT_COUNT
   const tone: ContextMeterTone = !measured
     ? 'empty'
     : usedRatio > 0.8
@@ -41,7 +35,6 @@ export function getContextMeterMetrics(
     usedPercentage: measured ? Math.round(usedRatio * 100) : null,
     remainingPercentage: measured ? Math.round(remainingRatio * 100) : null,
     progressValue: remainingTokens,
-    filledSegments,
     tone,
   }
 }

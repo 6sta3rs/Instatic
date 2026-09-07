@@ -18,7 +18,7 @@ export function ContentAgentMount({ isVisible }: ContentAgentMountProps) {
 
   return (
     <AgentStoreProvider store={store}>
-      <AgentPanel variant="docked" />
+      <AgentPanel />
     </AgentStoreProvider>
   )
 }

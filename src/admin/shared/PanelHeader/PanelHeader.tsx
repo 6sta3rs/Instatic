@@ -5,8 +5,8 @@
  * - Consistent 36px height, title, close button (Guideline #357).
  * - Draggable: spread `dragHandleProps` onto this element so the user can
  *   reposition the panel by dragging the header (cursor: grab).
- * - Children slot: extra action buttons (e.g. AgentPanel's "clear" button)
- *   are rendered between the title and the close button.
+ * - Children slot: extra action buttons (e.g. AgentPanel's "New chat" and
+ *   "AI settings" buttons) are rendered between the title and the close button.
  * - Accessibility: close button has aria-label; drag area has cursor: grab.
  *   When used, the panel root should have aria-label describing the panel.
  *
@@ -52,7 +52,7 @@ interface PanelHeaderProps {
   dragHandleProps?: PanelDragHandleProps
   /**
    * Optional extra action buttons rendered between the title and the close button.
-   * Example: AgentPanel's "clear conversation" button.
+   * Example: AgentPanel's "New chat" button.
    */
   children?: React.ReactNode
 }

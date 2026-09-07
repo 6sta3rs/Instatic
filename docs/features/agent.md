@@ -110,22 +110,32 @@ src/admin/pages/content/agent/
 └── useContentToolBridge.ts     — always-mounted handle + content-scope MCP relay
 
 src/admin/pages/site/panels/AgentPanel/
-├── AgentPanel.tsx          — panel shell, persisted message thread, and image-gallery orchestration
+├── AgentPanel.tsx          — panel shell (header, thread, composer) and image preview/menu orchestration
+├── AgentPanel.module.css
+├── AgentThread.tsx         — conversation log: turns, prose, tool runs, "Thinking…" row, stream errors
+├── AgentThread.module.css
+├── AgentEmptyState.tsx     — setup / choose-model / prompt empty states, credential notice, AI-settings button
+├── AgentEmptyState.module.css
+├── ToolCallRow.tsx         — `ActivityRow` + `ToolCallRow` (duration, error, swatches, screenshot disclosure)
+├── toolCallDisplay.ts      — tool name + params → human title, detail, icon, tone
 ├── AgentComposer.tsx       — controlled draft, paste/send lifecycle, active-model capability check
+├── AgentComposer.module.css
 ├── AgentImageGallery.tsx   — compact shared thumbnails for user and agent-tool images
+├── AgentImageGallery.module.css
 ├── AgentImagePreview.tsx   — modeless draggable full-image preview
 ├── AgentImageContextMenu.tsx — shared copy/download/Media actions for every image surface
 ├── PendingImageAttachmentGrid.tsx — compact pending tiles and per-image actions
+├── PendingImageAttachmentGrid.module.css
 ├── agentImageActions.ts    — authenticated blob reads, clipboard/download, and Media upload
 ├── agentImageTypes.ts      — shared preview/menu image contracts and keyboard positioning
 ├── agentImageAttachment.ts — browser decode, resize, JPEG normalisation, and base64 encoding
 ├── usePendingImageAttachments.ts — ref-backed sequential image queue and per-item cancellation
 ├── ModelPicker.tsx         — credential + model selector used in the input bar
-├── ConversationHistory.tsx — history popover (browse, restore, delete past threads)
-├── ContextMeter.tsx        — compact five-segment context + conversation-usage tooltip
+├── ConversationHistory.tsx — `ConversationSwitcher`: header title + history menu (restore, delete, new)
+├── ConversationHistory.module.css
+├── ContextMeter.tsx        — context-remaining ring + conversation-usage tooltip
 ├── ContextMeter.module.css
-├── contextMeterMetrics.ts  — five-band fill/tone calculation
-├── AgentPanel.module.css
+├── contextMeterMetrics.ts  — remaining/used percentages and tone bands
 └── index.ts                — barrel export
 
 src/admin/pages/ai/
@@ -141,7 +151,9 @@ src/admin/pages/ai/
 Shared AI number and spend formatting lives in `src/admin/ai/usageFormat.ts`, so
 the Audit workspace and compact composer usage detail use identical labels.
 
-The Agent Panel owns the credential list load for its header, lock-state empty states, and model picker. The header always contains a `ConversationHistory` popover (browse and restore past threads), a "New chat" button (`startNewAgentConversation`), a conditional "Clear conversation" button (visible when `agentMessages.length > 0`), a streaming badge, and an "AI settings" shortcut that routes to `/admin/ai`. The AI settings button is always visible in the header, independent of credential state.
+The Agent Panel owns the credential list load for its header, lock-state empty states, and model picker. The panel has no chrome of its own — the sidebar slot or the shared floating panel host supplies it — and composes the shared `PanelHeader` directly. The header title is the `ConversationSwitcher`: the active chat's title (or "New chat") with a chevron that opens the conversation history menu (restore, delete, start new; the active row always shows its delete glyph, other rows reveal it on hover/focus). Beside it sit a "New chat" button (`startNewAgentConversation`), an "AI settings" shortcut that routes to `/admin/ai` (always visible, independent of credential state), the dock/undock toggle when the host provides one, and the header-owned close button. There is no clear button and no streaming badge.
+
+The thread (`AgentThread`) folds consecutive same-role messages into one turn. The user's prompt sits on a raised card; the assistant's markdown renders as bare prose; there are no avatars, names, or timestamps. Tool calls render inline, in emission order, as flat activity rows (`ToolCallRow`: icon well · title · detail · client-observed duration or status glyph). A failed row shows its error underneath, a colour-token write shows swatches, and a run of two or more rows with at least one failure appends an "N failed" tally. A call that captured screenshots becomes an open `<details>` disclosure whose body is the shared image gallery. While a turn streams and no tool row is pending, a "Thinking…" row (`ActivityRow`) follows the last turn. Stream errors render as a single alert line after the last turn.
 
 The composer has two distinct lock states, expressed as `lockReason: 'setup' | 'chooseModel' | null`:
 
@@ -153,7 +165,7 @@ While credentials are still loading, `lockReason` stays `null` so the panel does
 
 When the panel opens, `AgentPanel` calls `loadScopeDefault()` so the model picker immediately shows the configured scope default — no "Default" placeholder, no send-time no-provider surprise. `composerLocked` is gated by `hasActiveProvider` (`Boolean(activeCredentialId && activeModelId)`), meaning a stale "No AI provider configured" error string never locks out the UI once a credential + model is staged; picking a model via `setAgentProvider` clears `agentError` immediately, re-enabling the composer.
 
-The composer action row includes a compact five-segment `<ContextMeter>` immediately before Attach images and Send. `AgentComposer` resolves the full active-model descriptor from `GET /admin/api/ai/providers/:id/models?credentialId=…` (the same catalogue-enriched response the picker uses), then uses its `contextWindow`, pricing, `capabilities.visionInput`, and `capabilities.toolCalling`. A model known not to support tools is blocked with an inline "choose an agent-capable model" message; the server repeats that gate authoritatively. The meter appears as soon as a model with a known window is selected. It represents **context remaining**: a fresh conversation is five green segments and the battery drains toward amber/red as context is consumed. Hover or keyboard focus opens a wide graphical tooltip with exact context used/available, cumulative conversation input/output/cache tokens, authoritative USD spend, and current-model list rates. A context snapshot belongs to the credential/model selection that measured it, so switching models renders the meter indeterminate until the next provider response rather than comparing stale usage to a new window. The meter stays hidden when no context window is known (Ollama, uncatalogued models).
+The composer is one raised card: pending attachments, the chromeless textarea, and the action row (model picker on the left; `<ContextMeter>`, Attach images, and Send/Stop on the right). `AgentComposer` resolves the full active-model descriptor from `GET /admin/api/ai/providers/:id/models?credentialId=…` (the same catalogue-enriched response the picker uses), then uses its `contextWindow`, pricing, `capabilities.visionInput`, and `capabilities.toolCalling`. A model known not to support tools is blocked with an inline "choose an agent-capable model" message; the server repeats that gate authoritatively. The meter appears as soon as a model with a known window is selected. It represents **context remaining**: a fresh conversation is a full green ring and the ring drains (turning amber, then red) as context is consumed. Hover or keyboard focus opens a wide graphical tooltip with exact context used/available, cumulative conversation input/output/cache tokens, authoritative USD spend, and current-model list rates. A context snapshot belongs to the credential/model selection that measured it, so switching models renders the meter indeterminate until the next provider response rather than comparing stale usage to a new window. The meter stays hidden when no context window is known (Ollama, uncatalogued models).
 
 ### Attaching user images
 
@@ -739,16 +751,16 @@ The server admits only one active writer per conversation. A concurrent tab rece
 
 ### Context meter
 
-The `<ContextMeter>` is a five-segment battery-style status beside the image action. Its hover/focus tooltip deliberately separates current context from cumulative billing:
+The `<ContextMeter>` is a small conic ring beside the image action, filled to `remainingPercentage`. Its hover/focus tooltip deliberately separates current context from cumulative billing:
 
 - **Window** (`windowTokens` prop from `AgentComposer`): the model's max total tokens, resolved once from `GET /admin/api/ai/providers/:id/models?credentialId=…`. The models endpoint enriches Anthropic and OpenAI models with `contextWindow` from the live OpenRouter catalogue (`server/ai/pricing/`); OpenRouter populates it from its own native fetch. Ollama models and uncatalogued models have no window — the meter hides.
 - **Current context** (`agentUsage.contextTokens`): the provider-normalised input held by the LATEST provider round, tagged with the credential/model selection that produced it. `normalizeContextTokens(providerId, buckets)` in `server/ai/contextTokens.ts` computes it:
   - Anthropic reports `input_tokens` excluding cache buckets, so the true total is `promptTokens + cacheReadTokens + cacheCreationTokens`.
   - OpenAI / OpenRouter / Ollama / Custom Provider report `input_tokens` as the full input; `promptTokens` alone is the total.
 
-**Live context, cumulative billing.** A turn makes one provider round-trip per tool batch. The tool loop emits a `context` event **each round** carrying THAT round's input buckets; the chat handler injects the normalised `contextTokens` and the browser updates the meter on every round — so the remaining-capacity battery drains *during* a long tool loop instead of only at the end. The measurement is the LATEST round's input, never the sum across rounds (which would over-count, since each round re-sends the growing context). The terminal `usage` event is **billing only**: prompt/completion/cache counts are summed across rounds. Before forwarding that terminal event, the persister resolves authoritative cache-aware spend (or accepts OpenRouter's native cost), writes the usage, then includes the resolved `costUsd` on the wire. The browser accumulates those totals in `agentUsage`; `loadAgentConversation` hydrates the same totals from `ConversationView`. The tooltip labels the sections “Context remaining” and “Conversation billing” so the two token meanings cannot be confused.
+**Live context, cumulative billing.** A turn makes one provider round-trip per tool batch. The tool loop emits a `context` event **each round** carrying THAT round's input buckets; the chat handler injects the normalised `contextTokens` and the browser updates the meter on every round — so the remaining-capacity ring drains *during* a long tool loop instead of only at the end. The measurement is the LATEST round's input, never the sum across rounds (which would over-count, since each round re-sends the growing context). The terminal `usage` event is **billing only**: prompt/completion/cache counts are summed across rounds. Before forwarding that terminal event, the persister resolves authoritative cache-aware spend (or accepts OpenRouter's native cost), writes the usage, then includes the resolved `costUsd` on the wire. The browser accumulates those totals in `agentUsage`; `loadAgentConversation` hydrates the same totals from `ConversationView`. The tooltip labels the sections “Context remaining” and “Conversation billing” so the two token meanings cannot be confused.
 
-Five equal bands approximate remaining capacity: an empty conversation has all five filled, then the display drains by fifths until no capacity remains. More than 40% remaining is healthy, 20–40% warns, and below 20% is danger. An unmeasured model switch uses five neutral segments until its first response. The keyboard-focusable details button exposes the exact remaining/window counts and percentage in its accessible name; segment count is only the compact visual approximation.
+The ring's fill is the exact `remainingPercentage` (set as the `--meter-fill` custom property). More than 40% remaining is healthy, 20–40% warns, and below 20% is danger. An unmeasured model switch renders a full neutral ring until its first response. The keyboard-focusable details button exposes the exact remaining/window counts and percentage in its accessible name.
 
 ### Live model catalogue
 
@@ -784,6 +796,16 @@ unblocks deletion of the credential that had been protected by the default FK.
 - **Tool failure.** Browser executors wrap every call in try/catch. Failures return `{ ok: false, error }`. The model reads the error message in the next turn and retries with corrected input.
 - **Tool-result delivery failure.** A 404 means the browser completed work for a bridge the active runtime no longer owns (commonly a server restart). While the chat signal is active, `postToolResult` propagates that failure, the client aborts the stale response, finalizes its pending badge, and asks the user to send again. Only a POST already being torn down by an aborted signal is ignored quietly. A clean NDJSON EOF without `done` or `error` is handled the same way instead of being mistaken for success.
 - **Page reload mid-stream.** The response cancel hook aborts the provider and releases the writer lock. Conversation rows survive; loading the thread shows any unmatched call once as interrupted, with no reconstructed session-only screenshot and no live timeout/spinner.
+- **Durations.** A live tool row measures `durationMs` in the browser (`startedAt` on the `toolCall` event, closed on `toolResult`). `rehydrateMessages` rebuilds the same number from the persisted `createdAt` gap between the tool-call row and its `role:'tool'` result row; an interrupted call gets no duration.
+
+### Not built (needs data the runtime does not emit)
+
+- **Revert** per assistant turn — no per-turn undo boundary exists in the editor store.
+- **"Thought Ns"** — no thinking/reasoning block or stream event; drivers drop thinking deltas.
+- **Clarifying-question cards** — no structured question tool.
+- **Changes / Undo card** — tool results only carry `{ ok, error }` client-side.
+- **Branch footer** — conversations are linear.
+- **"Viewed Home"-style read rows** — `open_document` params carry only `document.id`; the row keeps "Opening document · <id>".
 
 ---
 
@@ -877,8 +899,11 @@ unblocks deletion of the credential that had been protected by the default FK.
   - `src/admin/pages/content/agent/contentBridge.ts` — content write-tool browser dispatcher
   - `src/admin/pages/content/agent/contentBridgeHandle.ts` — imperative bridge handle registered by ContentPage
   - `src/admin/pages/site/panels/AgentPanel/AgentComposer.tsx` — resolves model window/pricing/capabilities and places the meter in the action row
-  - `src/admin/pages/site/panels/AgentPanel/ContextMeter.tsx` — five-segment context status and rich usage tooltip
-  - `src/admin/pages/site/panels/AgentPanel/contextMeterMetrics.ts` — exact five-band fill/tone calculation
+  - `src/admin/pages/site/panels/AgentPanel/AgentThread.tsx` — turns, prose, inline tool runs, "Thinking…" row
+  - `src/admin/pages/site/panels/AgentPanel/ToolCallRow.tsx` — `ActivityRow` + `ToolCallRow` (duration, error, swatches, screenshot disclosure)
+  - `src/admin/pages/site/panels/AgentPanel/ContextMeter.tsx` — context-remaining ring and usage tooltip
+  - `src/admin/pages/site/panels/AgentPanel/contextMeterMetrics.ts` — remaining/used percentages and tone bands
+  - `src/admin/ai/usageFormat.ts` — shared number, cost, compact-token, and per-MTok price formatting
 - Gate tests:
   - `src/__tests__/architecture/ai-tool-input-object.test.ts`
   - `src/__tests__/architecture/ai-tool-schema-ssot.test.ts`

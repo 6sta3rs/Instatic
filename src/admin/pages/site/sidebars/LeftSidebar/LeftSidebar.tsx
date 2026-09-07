@@ -151,7 +151,7 @@ export function LeftSidebar({
             {(props) => (
               <AgentStoreProvider store={useEditorStore}>
                 <Suspense fallback={null}>
-                  <AgentPanel variant="docked" {...props} />
+                  <AgentPanel {...props} />
                 </Suspense>
               </AgentStoreProvider>
             )}

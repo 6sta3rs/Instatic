@@ -97,6 +97,8 @@ interface TextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
   monospace?: boolean
   emphasis?: TextEmphasis
   resize?: 'none' | 'vertical' | 'both'
+  /** Drops the field fill, border, and inset so the textarea sits inside a parent card that owns the chrome. */
+  chromeless?: boolean
   /** React 19: ref is a regular prop on function components. */
   ref?: Ref<HTMLTextAreaElement>
 }
@@ -364,6 +366,7 @@ export function Textarea({
   monospace = false,
   emphasis = 'default',
   resize = 'vertical',
+  chromeless = false,
   autoComplete = 'off',
   ref,
   ...props
@@ -375,6 +378,7 @@ export function Textarea({
       aria-invalid={invalid || props['aria-invalid'] ? true : undefined}
       data-emphasis={emphasis !== 'default' ? emphasis : undefined}
       data-resize={resize}
+      data-chromeless={chromeless ? '' : undefined}
       className={cn(
         styles.input,
         styles.textarea,

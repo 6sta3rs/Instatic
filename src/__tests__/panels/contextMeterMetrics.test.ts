@@ -3,23 +3,21 @@ import { getContextMeterMetrics } from '@site/panels/AgentPanel'
 
 describe('context meter metrics', () => {
   it.each([
-    [null, 5, 'empty'],
-    [0, 5, 'healthy'],
-    [1, 5, 'healthy'],
-    [200, 4, 'healthy'],
-    [400, 3, 'healthy'],
-    [600, 2, 'healthy'],
-    [601, 2, 'warning'],
-    [800, 1, 'warning'],
-    [801, 1, 'danger'],
-    [1000, 0, 'danger'],
-    [1200, 0, 'danger'],
+    [null, 'empty'],
+    [0, 'healthy'],
+    [1, 'healthy'],
+    [200, 'healthy'],
+    [400, 'healthy'],
+    [600, 'healthy'],
+    [601, 'warning'],
+    [800, 'warning'],
+    [801, 'danger'],
+    [1000, 'danger'],
+    [1200, 'danger'],
   ] as const)(
-    'maps %s used tokens to %s filled segments and %s tone',
-    (usedTokens, filledSegments, tone) => {
-      const metrics = getContextMeterMetrics(usedTokens, 1000)
-      expect(metrics.filledSegments).toBe(filledSegments)
-      expect(metrics.tone).toBe(tone)
+    'maps %s used tokens to %s tone',
+    (usedTokens, tone) => {
+      expect(getContextMeterMetrics(usedTokens, 1000).tone).toBe(tone)
     },
   )
 

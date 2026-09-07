@@ -6,10 +6,9 @@
  *   - 36px PanelHeader from @admin/shared/PanelHeader,
  *   - scrollable content area with consistent 8px padding + 10px gap.
  *
- * Floating-overlay panels (DomPanel / AgentPanel / PropertiesPanel) keep
- * their own positioning shells because they manage drag, width, and
- * z-index — but their docked variant is expected to land inside the
- * standard sidebar slot, so they don't conflict.
+ * PropertiesPanel keeps its own positioning shell because it manages drag,
+ * width, and z-index. AgentPanel has no shell of its own: the sidebar slot
+ * or the shared floating panel host supplies chrome, and the panel fills it.
  */
 
 .panel {

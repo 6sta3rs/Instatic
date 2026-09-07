@@ -15,27 +15,14 @@
  * use AdminWorkspaceCanvasLayout so they do not download Site-editor-only
  * modules on first paint.
  *
- * Editor Overlay Layout (Guideline #410 — motion-editor style):
- *   ┌─────────────────────────────── Toolbar ──────────────────────────────────┐  z-60
- *   │ [SiteName] [Undo/Redo] [+ Add] ─────── [Zoom] [Save] [Publish] [⚙] [✦] │
- *   ├──────────────────────────── Canvas (full-bleed) ─────────────────────────┤
- *   │  [DOM Tree Panel ▓]     canvas          [Properties Panel ▓]            │
- *   │  position: absolute overlays (z-50)     [AI Panel ▓] (bottom-right)     │
- *   └──────────────────────────────────────────────────────────────────────────┘
- *
- * Five independent self-contained floating panels (Guideline #410):
- * - DomPanel (Layers) — top-left
- * - PropertiesPanel — top-right
- * - AgentPanel (AI) — bottom-right, independent visibility
- * - Site explorer panel — site concepts: pages, components, styles, scripts
- * - CodeEditorPanel (Task #432) — center-stage, code editing
+ * Editor layout: the toolbar sits above a full-bleed canvas. The left rail
+ * hosts Explorer, Selectors, Framework, Dependencies, plugin panels, and the
+ * AI Assistant — each dockable in the sidebar slot or undocked into the
+ * shared floating panel host, which owns all floating chrome. Properties
+ * docks on the right; CodeEditorPanel floats center-stage.
  *
  * usePersistence handles the CMS draft load on mount and connects the
  * live-collab provider — edits stream continuously; there is no manual save.
- *
- * Agent Panel: Phase D AI assistant — self-contained floating panel (Guideline #410).
- * Authenticates via ambient Claude Code credentials through the local Bun server.
- * No env vars, no API keys, no endpoint configuration required (Constraint #385).
  */
 import { Toolbar } from '@admin/pages/site/toolbar/Toolbar'
 import { ZoomControls } from '@admin/pages/site/toolbar/ZoomControls'

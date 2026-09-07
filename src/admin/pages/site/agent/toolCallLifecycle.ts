@@ -1,5 +1,5 @@
 import { INTERRUPTED_TOOL_RESULT_ERROR, aiToolError } from '@core/ai'
-import type { AgentMessage } from './types'
+import type { AgentMessage, AgentToolCall } from './types'
 
 /**
  * A pending tool call belongs only to the currently live response stream.
@@ -16,8 +16,14 @@ export function failPendingToolCalls(
   for (const block of message.blocks) {
     if (block.kind !== 'toolCall' || block.toolCall.status !== 'pending') continue
     block.toolCall.status = 'error'
+    block.toolCall.durationMs = toolCallDurationMs(block.toolCall)
     block.toolCall.result = aiToolError(error)
     changed = true
   }
   return changed
+}
+
+/** Wall-clock time since the browser saw the call start; undefined for rehydrated rows. */
+export function toolCallDurationMs(call: AgentToolCall): number | undefined {
+  return call.startedAt === undefined ? undefined : Date.now() - call.startedAt
 }

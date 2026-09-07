@@ -8,7 +8,7 @@ import {
   type OpenAgentImageMenu,
 } from './agentImageTypes'
 import type { PendingImageAttachment } from './usePendingImageAttachments'
-import styles from './AgentPanel.module.css'
+import styles from './PendingImageAttachmentGrid.module.css'
 
 interface PendingImageAttachmentGridProps {
   entries: PendingImageAttachment[]
@@ -76,7 +76,6 @@ export function PendingImageAttachmentGrid({
             className={styles.attachmentCard}
             aria-label={`Attached image: ${entry.filename}`}
             aria-busy={entry.status === 'processing'}
-            title={entry.filename}
           >
             {image ? (
               <Button
@@ -96,7 +95,12 @@ export function PendingImageAttachmentGrid({
             ) : (
               <div className={styles.attachmentPreviewPlaceholder} aria-hidden="true" />
             )}
-            <span className={styles.attachmentStatus} role="status" aria-live="polite">
+            <span
+              className={styles.attachmentStatus}
+              role="status"
+              aria-live="polite"
+              data-status={entry.status}
+            >
               {entry.status === 'processing'
                 ? 'Preparing…'
                 : entry.status === 'error'

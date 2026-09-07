@@ -1,7 +1,6 @@
 /**
- * ConversationHistory — popover triggered by the chat-history button in
- * the AgentPanel header. Lists this user's site-scope conversations and
- * exposes load, delete, and "+ New" actions.
+ * ConversationSwitcher — the panel-header title: the active chat's name with
+ * a chevron that opens the conversation list (restore, delete, start new).
  *
  * Built on the shared `ContextMenu` primitive so positioning, dismiss
  * handling, and styling match the rest of the admin.
@@ -11,13 +10,12 @@ import { useEffect, useRef, useState } from 'react'
 import { useAgentStore } from '@admin/ai/useAgentStore'
 import { Button } from '@ui/components/Button'
 import { ContextMenu, ContextMenuItem, ContextMenuSeparator } from '@ui/components/ContextMenu'
-import { BulletlistSolidIcon } from 'pixel-art-icons/icons/bulletlist-solid'
+import { ChevronDownIcon } from 'pixel-art-icons/icons/chevron-down'
 import { PlusIcon } from 'pixel-art-icons/icons/plus'
 import { TrashSolidIcon } from 'pixel-art-icons/icons/trash-solid'
-import { formatRelativeTime } from './relativeTime'
-import styles from './AgentPanel.module.css'
+import styles from './ConversationHistory.module.css'
 
-export function ConversationHistory() {
+export function ConversationSwitcher() {
   const conversations = useAgentStore((s) => s.agentConversations)
   const activeId = useAgentStore((s) => s.agentConversationId)
   const loadAgentConversations = useAgentStore((s) => s.loadAgentConversations)
@@ -32,11 +30,15 @@ export function ConversationHistory() {
   const triggerRef = useRef<HTMLButtonElement>(null)
   const [open, setOpen] = useState(false)
 
-  // Refresh the list every time the popover opens. Cheap query.
+  // Refresh the list every time the menu opens. Cheap query.
   useEffect(() => {
     if (!open) return
     void loadAgentConversations()
   }, [open, loadAgentConversations])
+
+  // The list is only fetched when the menu opens, so a restored conversation
+  // reads "New chat" until the first open. Acceptable: no extra fetch on mount.
+  const label = conversations.find((conv) => conv.id === activeId)?.title ?? 'New chat'
 
   return (
     <>
@@ -45,15 +47,16 @@ export function ConversationHistory() {
         type="button"
         variant="ghost"
         size="xs"
-        iconOnly
         disabled={controlsDisabled}
         onClick={() => setOpen((v) => !v)}
         tooltip="Chat history"
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label="Conversation history"
+        className={styles.switcherTrigger}
       >
-        <BulletlistSolidIcon size={14} />
+        <span className={styles.switcherLabel}>{label}</span>
+        <ChevronDownIcon size={10} className={styles.switcherChevron} aria-hidden="true" />
       </Button>
       {open && (
         <ContextMenu
@@ -92,41 +95,37 @@ export function ConversationHistory() {
                   aria-checked={isActive}
                   active={isActive}
                   disabled={controlsDisabled}
+                  className={styles.historyItem}
                   onClick={() => {
                     if (!isActive) void loadAgentConversation(conv.id)
                     setOpen(false)
                   }}
                 >
                   <span className={styles.historyItemTitle}>{conv.title}</span>
-                  <span className={styles.historyItemMeta}>
-                    <span className={styles.historyItemTime}>
-                      {formatRelativeTime(Date.parse(conv.updatedAt))}
-                    </span>
-                    {/* Span (not a native button) so it doesn't nest inside the
-                        ContextMenuItem's Button — nested interactive
-                        elements are invalid HTML + would trip BTN-3. */}
-                    <span
-                      role="button"
-                      tabIndex={controlsDisabled ? -1 : 0}
-                      aria-disabled={controlsDisabled}
-                      className={styles.historyItemDelete}
-                      aria-label={`Delete chat "${conv.title}"`}
-                      onClick={(e) => {
+                  {/* Span (not a native button) so it doesn't nest inside the
+                      ContextMenuItem's Button — nested interactive
+                      elements are invalid HTML + would trip BTN-3. */}
+                  <span
+                    role="button"
+                    tabIndex={controlsDisabled ? -1 : 0}
+                    aria-disabled={controlsDisabled}
+                    className={styles.historyItemDelete}
+                    aria-label={`Delete chat "${conv.title}"`}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      if (controlsDisabled) return
+                      void deleteAgentConversation(conv.id)
+                    }}
+                    onKeyDown={(e) => {
+                      if (controlsDisabled) return
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
                         e.stopPropagation()
-                        if (controlsDisabled) return
                         void deleteAgentConversation(conv.id)
-                      }}
-                      onKeyDown={(e) => {
-                        if (controlsDisabled) return
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault()
-                          e.stopPropagation()
-                          void deleteAgentConversation(conv.id)
-                        }
-                      }}
-                    >
-                      <TrashSolidIcon size={12} aria-hidden="true" />
-                    </span>
+                      }
+                    }}
+                  >
+                    <TrashSolidIcon size={12} aria-hidden="true" />
                   </span>
                 </ContextMenuItem>
               )

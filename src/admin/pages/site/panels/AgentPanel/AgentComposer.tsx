@@ -15,7 +15,7 @@ import { Button } from '@ui/components/Button'
 import { FileUpload } from '@ui/components/FileUpload'
 import { Textarea } from '@ui/components/Input'
 import { pushToast } from '@ui/components/Toast'
-import { SendSolidIcon } from 'pixel-art-icons/icons/send-solid'
+import { ArrowUpIcon } from 'pixel-art-icons/icons/arrow-up'
 import { SquareSolidIcon } from 'pixel-art-icons/icons/square-solid'
 import { ImageSolidIcon } from 'pixel-art-icons/icons/image-solid'
 import { ContextMeter } from './ContextMeter'
@@ -26,7 +26,7 @@ import {
 } from './agentImageTypes'
 import { PendingImageAttachmentGrid } from './PendingImageAttachmentGrid'
 import { usePendingImageAttachments } from './usePendingImageAttachments'
-import styles from './AgentPanel.module.css'
+import styles from './AgentComposer.module.css'
 
 export type ComposerLockReason = 'setup' | 'chooseModel'
 
@@ -57,6 +57,7 @@ export function AgentComposer({
   const abortAgent = useAgentStore((state) => state.abortAgent)
   const activeCredentialId = useAgentStore((state) => state.agentActiveCredentialId)
   const activeModelId = useAgentStore((state) => state.agentActiveModelId)
+  const hasMessages = useAgentStore((state) => state.agentMessages.length > 0)
   const [draft, setDraft] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const attachments = usePendingImageAttachments()
@@ -187,42 +188,42 @@ export function AgentComposer({
   else if (imageStatus === 'error') sendTooltip = 'Remove the failed image'
 
   return (
-    <div className={styles.inputBar}>
-      {hasAttachments && (
-        <PendingImageAttachmentGrid
-          entries={attachments.pending}
-          actionsDisabled={submitting || isStreaming}
-          onRemove={attachments.remove}
-          onOpenImage={onOpenImage}
-          onOpenImageMenu={onOpenImageMenu}
-        />
-      )}
-      {hasAttachments && imageStatus === 'checking-model' && (
-        <p role="status" className={styles.attachmentNotice}>Checking whether this model accepts images…</p>
-      )}
-      {hasAttachments && imageStatus === 'unsupported-model' && (
-        <p role="alert" className={styles.attachmentWarning}>
-          Choose a vision-capable model or remove the image.
-        </p>
-      )}
-      {hasAttachments && imageStatus === 'model-error' && (
-        <p role="alert" className={styles.attachmentWarning}>
-          Could not verify image support for this model. Choose another model or remove the image.
-        </p>
-      )}
-      {modelCannotRunAgent && (
-        <p role="alert" className={styles.attachmentWarning}>
-          Choose an agent-capable model that supports tool calling.
-        </p>
-      )}
-      <form
-        onSubmit={(event) => {
-          event.preventDefault()
-          void submit()
-        }}
-        className={styles.inputForm}
-      >
-        {!isStreaming && (
+    <div className={styles.composer}>
+      <div className={styles.composerCard}>
+        {hasAttachments && (
+          <PendingImageAttachmentGrid
+            entries={attachments.pending}
+            actionsDisabled={submitting || isStreaming}
+            onRemove={attachments.remove}
+            onOpenImage={onOpenImage}
+            onOpenImageMenu={onOpenImageMenu}
+          />
+        )}
+        {hasAttachments && imageStatus === 'checking-model' && (
+          <p role="status" className={styles.attachmentNotice}>Checking whether this model accepts images…</p>
+        )}
+        {hasAttachments && imageStatus === 'unsupported-model' && (
+          <p role="alert" className={styles.attachmentWarning}>
+            Choose a vision-capable model or remove the image.
+          </p>
+        )}
+        {hasAttachments && imageStatus === 'model-error' && (
+          <p role="alert" className={styles.attachmentWarning}>
+            Could not verify image support for this model. Choose another model or remove the image.
+          </p>
+        )}
+        {modelCannotRunAgent && (
+          <p role="alert" className={styles.attachmentWarning}>
+            Choose an agent-capable model that supports tool calling.
+          </p>
+        )}
+        <form
+          onSubmit={(event) => {
+            event.preventDefault()
+            void submit()
+          }}
+          className={styles.composerForm}
+        >
           <Textarea
             ref={inputRef}
             value={draft}
@@ -230,85 +231,85 @@ export function AgentComposer({
               ? 'Add AI credentials to start chatting'
               : lockReason === 'chooseModel'
                 ? 'Choose a model below to start'
-                : 'Tell me what to build… (attach images or press Enter to send)'}
+                : hasMessages
+                  ? 'Add follow-up…'
+                  : 'Describe what to build…'}
             aria-label="Message to AI assistant"
             rows={2}
             resize="none"
-            disabled={composerLocked || conversationPending || providerPending || submitting}
+            chromeless
+            className={styles.composerInput}
+            disabled={composerLocked || conversationPending || providerPending || submitting || isStreaming}
             onPaste={handlePaste}
             onKeyDown={handleKeyDown}
-            onChange={(event) => {
-              setDraft(event.target.value)
-              event.target.style.height = 'auto'
-              event.target.style.height = `${Math.min(event.target.scrollHeight, 120)}px`
-            }}
+            onChange={(event) => setDraft(event.target.value)}
           />
-        )}
-        <div className={styles.inputControls}>
-          <ModelPicker
-            className={styles.inputControlsPicker}
-            credentials={credentials}
-            credentialsLoaded={credentialsLoaded}
-            onRefreshCredentials={onRefreshCredentials}
-            disabled={isStreaming || conversationPending || providerPending || submitting}
-          />
-          <div className={styles.inputControlActions}>
-            <ContextMeter
-              credentialId={activeCredentialId}
-              modelId={activeModel?.id ?? activeModelId}
-              windowTokens={activeModel?.contextWindow ?? null}
-              pricing={activeModel?.pricing ?? null}
+          <div className={styles.composerActions}>
+            <ModelPicker
+              className={styles.composerActionsPicker}
+              credentials={credentials}
+              credentialsLoaded={credentialsLoaded}
+              onRefreshCredentials={onRefreshCredentials}
+              disabled={isStreaming || conversationPending || providerPending || submitting}
             />
-            <FileUpload
-              multiple
-              accept="image/png,image/jpeg,image/webp"
-              onChange={handleImageSelection}
-              buttonProps={{
-                variant: 'ghost',
-                size: 'sm',
-                iconOnly: true,
-                disabled: composerLocked
-                  || isStreaming
-                  || conversationPending
-                  || providerPending
-                  || submitting
-                  || attachments.pending.length >= AI_USER_IMAGE_MAX_PER_MESSAGE,
-                tooltip: attachments.pending.length >= AI_USER_IMAGE_MAX_PER_MESSAGE
-                  ? `Maximum ${AI_USER_IMAGE_MAX_PER_MESSAGE} images per message`
-                  : 'Attach images',
-                'aria-label': 'Attach images',
-              }}
-            >
-              <ImageSolidIcon size={14} aria-hidden="true" />
-            </FileUpload>
-            {isStreaming ? (
-              <Button
-                type="button"
-                variant="destructive"
-                size="sm"
-                iconOnly
-                onClick={abortAgent}
-                tooltip="Stop"
-                aria-label="Stop"
+            <div className={styles.composerActionsRight}>
+              <ContextMeter
+                credentialId={activeCredentialId}
+                modelId={activeModel?.id ?? activeModelId}
+                windowTokens={activeModel?.contextWindow ?? null}
+                pricing={activeModel?.pricing ?? null}
+              />
+              <FileUpload
+                multiple
+                accept="image/png,image/jpeg,image/webp"
+                onChange={handleImageSelection}
+                buttonProps={{
+                  variant: 'ghost',
+                  size: 'xs',
+                  iconOnly: true,
+                  disabled: composerLocked
+                    || isStreaming
+                    || conversationPending
+                    || providerPending
+                    || submitting
+                    || attachments.pending.length >= AI_USER_IMAGE_MAX_PER_MESSAGE,
+                  tooltip: attachments.pending.length >= AI_USER_IMAGE_MAX_PER_MESSAGE
+                    ? `Maximum ${AI_USER_IMAGE_MAX_PER_MESSAGE} images per message`
+                    : 'Attach images',
+                  'aria-label': 'Attach images',
+                }}
               >
-                <SquareSolidIcon size={14} />
-              </Button>
-            ) : (
-              <Button
-                type="submit"
-                variant="primary"
-                size="sm"
-                iconOnly
-                disabled={sendDisabled}
-                tooltip={sendTooltip}
-                aria-label="Send"
-              >
-                <SendSolidIcon size={14} />
-              </Button>
-            )}
+                <ImageSolidIcon size={12} aria-hidden="true" />
+              </FileUpload>
+              {isStreaming ? (
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="xs"
+                  iconOnly
+                  onClick={abortAgent}
+                  tooltip="Stop"
+                  aria-label="Stop"
+                >
+                  <SquareSolidIcon size={12} />
+                </Button>
+              ) : (
+                <Button
+                  type="submit"
+                  variant="primary"
+                  size="xs"
+                  iconOnly
+                  disabled={sendDisabled}
+                  tooltip={sendTooltip}
+                  aria-label="Send"
+                >
+                  <ArrowUpIcon size={12} />
+                </Button>
+              )}
+            </div>
           </div>
-        </div>
-      </form>
+        </form>
+      </div>
     </div>
   )
 }

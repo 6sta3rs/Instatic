@@ -22,13 +22,8 @@
   padding: 0;
   aspect-ratio: 1;
   overflow: hidden;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   background: var(--bg-surface-2);
-  box-shadow: inset 0 0 0 1px var(--overlay-10);
-}
-
-.thumbnailButton:hover {
-  background: var(--bg-surface-3);
 }
 
 .thumbnail {

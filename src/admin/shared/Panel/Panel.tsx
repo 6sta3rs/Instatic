@@ -16,10 +16,10 @@
  * SearchBar sat flush to the panel edge while every other panel had an
  * 8px inset. Centralizing the shell here makes that impossible.
  *
- * Floating variants (DomPanel / AgentPanel / PropertiesPanel) keep their
- * own positioning shells — they manage drag, resize, and z-index, so
- * sharing this shell would over-couple them. They still use the same
- * `<PanelHeader>` so the header bar stays consistent.
+ * PropertiesPanel keeps its own positioning shell (it manages drag, resize,
+ * and z-index). AgentPanel fills whatever host mounts it — the sidebar slot
+ * or the shared floating panel host — and composes `<PanelHeader>` directly
+ * so the header bar stays consistent.
  *
  * @see PanelHeader — header inside this shell
  * @see Guideline #192 — `data-panel` event-propagation guard

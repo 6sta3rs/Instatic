@@ -34,7 +34,7 @@ import type {
   ServerStreamEvent,
 } from './types'
 import { getErrorMessage } from '@core/utils/errorMessage'
-import { failPendingToolCalls } from './toolCallLifecycle'
+import { failPendingToolCalls, toolCallDurationMs } from './toolCallLifecycle'
 
 // ---------------------------------------------------------------------------
 // Stream-event schema
@@ -196,6 +196,7 @@ export async function processStreamEvent(
             params: inputAsRecord ?? {},
             result: null,
             status: 'pending',
+            startedAt: Date.now(),
           },
         })
       })
@@ -216,6 +217,7 @@ export async function processStreamEvent(
         )
         if (!block) return
         block.toolCall.status = event.ok ? 'success' : 'error'
+        block.toolCall.durationMs = toolCallDurationMs(block.toolCall)
         block.toolCall.result = {
           ok: event.ok,
           error: event.ok ? undefined : event.error ?? 'Tool call failed.',

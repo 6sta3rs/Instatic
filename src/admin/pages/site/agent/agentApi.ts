@@ -81,6 +81,11 @@ export function rehydrateMessages(
               ok: resultBlock.ok,
               error: resultBlock.ok ? undefined : resultBlock.error,
             }
+            // Persisted rows carry no timing; the gap between the two rows' timestamps is close enough.
+            const resultAt = Date.parse(rec.createdAt)
+            if (Number.isFinite(existing.startedAt) && Number.isFinite(resultAt)) {
+              existing.durationMs = Math.max(0, resultAt - (existing.startedAt ?? 0))
+            }
           } else {
             markInterrupted(existing)
           }
@@ -117,6 +122,7 @@ export function rehydrateMessages(
             : {}),
           result: null,
           status: 'pending',
+          startedAt: Date.parse(rec.createdAt),
         }
         msg.blocks.push({ kind: 'toolCall', toolCall })
         unanswered.set(block.toolCallId, toolCall)

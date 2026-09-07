@@ -5,7 +5,8 @@ import { AgentStoreProvider } from '@admin/ai/AgentStoreContext'
 import { clearModelListCache, type CredentialView } from '@admin/ai/api'
 import { MemoryRouter, useLocation } from '@admin/lib/routing'
 import { AdminSessionProvider } from '@admin/session'
-import type { AgentSlice } from '@site/agent'
+import { rehydrateMessages, type AgentSlice } from '@site/agent'
+import type { ConversationView } from '@admin/ai/api'
 import type { AiUserContentBlock } from '@core/ai'
 import type { CmsCurrentUser } from '@core/persistence'
 import { AgentPanel } from '@site/panels/AgentPanel'
@@ -197,7 +198,7 @@ function renderAgentPanel(
     <AdminSessionProvider user={user}>
       <MemoryRouter initialEntries={['/admin/site']}>
         <AgentStoreProvider store={store}>
-          <AgentPanel variant="docked" />
+          <AgentPanel />
           <RouteProbe />
         </AgentStoreProvider>
       </MemoryRouter>
@@ -394,8 +395,7 @@ describe('AgentPanel', () => {
 
     const meter = await screen.findByRole('button', { name: /AI context remaining/ })
     const attach = screen.getByRole('button', { name: 'Attach images' })
-    expect(meter.querySelectorAll('[data-context-segment]')).toHaveLength(5)
-    expect(meter.querySelectorAll('[data-filled="true"]')).toHaveLength(2)
+    expect(meter.style.getPropertyValue('--meter-fill')).toBe('38')
     expect(meter.getAttribute('data-tone')).toBe('warning')
     expect(meter.getAttribute('aria-label')).toContain(
       '48,000 of 128,000 context tokens available (38%)',
@@ -412,7 +412,7 @@ describe('AgentPanel', () => {
     expect(tooltip.textContent).toContain('$3 in · $15 out')
   })
 
-  it('shows a full healthy battery for an empty conversation', async () => {
+  it('shows a full healthy ring for an empty conversation', async () => {
     const credential = { ...TEST_CREDENTIAL, id: 'cred_context_empty' }
     installModelFetch(true, true, 128_000, credential)
     renderAgentPanel({
@@ -421,7 +421,7 @@ describe('AgentPanel', () => {
     })
 
     const meter = await screen.findByRole('button', { name: /AI context remaining/ })
-    expect(meter.querySelectorAll('[data-filled="true"]')).toHaveLength(5)
+    expect(meter.style.getPropertyValue('--meter-fill')).toBe('100')
     expect(meter.getAttribute('data-tone')).toBe('healthy')
     expect(meter.getAttribute('aria-label')).toContain(
       '128,000 of 128,000 context tokens available (100%)',
@@ -983,4 +983,98 @@ describe('AgentPanel', () => {
     expect(screen.getByRole('group', { name: 'Images captured by assistant tools' })
       .querySelectorAll('button')).toHaveLength(2)
   })
+
+  it('rebuilds a rehydrated tool call duration from the persisted row timestamps', async () => {
+    installNoCredentialFetch()
+    const messages = rehydrateMessages([
+      {
+        id: 'call',
+        position: 0,
+        role: 'assistant',
+        content: [{ kind: 'toolCall', toolCallId: 'tool-1', toolName: 'site_read_document', input: {} }],
+        toolCallId: 'tool-1',
+        toolName: 'site_read_document',
+        createdAt: '2026-07-11T10:00:00.000Z',
+      },
+      {
+        id: 'result',
+        position: 1,
+        role: 'tool',
+        content: [{ kind: 'toolResult', ok: true }],
+        toolCallId: 'tool-1',
+        toolName: 'site_read_document',
+        createdAt: '2026-07-11T10:00:02.000Z',
+      },
+    ])
+    const [block] = messages[0]!.blocks
+    expect(block?.kind === 'toolCall' ? block.toolCall.durationMs : null).toBe(2000)
+
+    renderAgentPanel({ agentMessages: messages })
+    await screen.findByRole('status', { name: /Completed Reading document/ })
+    expect(screen.getByText('2.0s')).toBeTruthy()
+  })
+
+  it('tallies failed steps under a multi-step tool run', async () => {
+    installNoCredentialFetch()
+    renderAgentPanel({
+      agentMessages: [{
+        id: 'assistant-run',
+        role: 'assistant',
+        blocks: [
+          {
+            kind: 'toolCall',
+            toolCall: { id: 'ok', actionType: 'site_read_document', params: {}, result: { ok: true }, status: 'success' },
+          },
+          {
+            kind: 'toolCall',
+            toolCall: {
+              id: 'bad',
+              actionType: 'site_read_document',
+              params: {},
+              result: { ok: false, error: 'Document not found.' },
+              status: 'error',
+            },
+          },
+        ],
+        timestamp: Date.now(),
+      }],
+    })
+
+    expect(await screen.findByText('1 failed')).toBeTruthy()
+    expect(screen.getByText('Document not found.').getAttribute('role')).toBe('alert')
+  })
+
+  it('lists conversations by title only in the header switcher', async () => {
+    installNoCredentialFetch()
+    const conversation: ConversationView = {
+      id: 'conv-1',
+      scope: 'site',
+      title: 'Hero section',
+      credentialId: 'cred_1',
+      modelId: 'model-1',
+      promptTokensTotal: 0,
+      completionTokensTotal: 0,
+      costUsdTotal: 0,
+      cacheReadTokensTotal: 0,
+      cacheCreationTokensTotal: 0,
+      contextTokens: 0,
+      createdAt: '2026-07-11T10:00:00.000Z',
+      updatedAt: new Date(Date.now() - 5 * 60_000).toISOString(),
+    }
+    renderAgentPanel({ agentConversations: [conversation], agentConversationId: conversation.id })
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Conversation history' }))
+    const menu = await screen.findByRole('menu', { name: 'Conversation history' })
+    expect(menu.textContent).toContain('Hero section')
+    expect(menu.textContent).not.toMatch(/\b(now|\d+[mhd])\b/)
+    expect(screen.getByRole('button', { name: 'Delete chat "Hero section"' })).toBeTruthy()
+  })
 })
+
+function installNoCredentialFetch(): void {
+  globalThis.fetch = mock(async (input: RequestInfo | URL) => {
+    const url = typeof input === 'string' ? input : input.toString()
+    if (url.endsWith('/admin/api/ai/credentials')) return jsonResponse({ credentials: [] })
+    throw new Error(`Unexpected fetch: ${url}`)
+  }) as typeof fetch
+}

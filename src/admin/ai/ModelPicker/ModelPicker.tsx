@@ -28,6 +28,7 @@ import {
 import { ChevronDownIcon } from 'pixel-art-icons/icons/chevron-down'
 import { cn } from '@ui/cn'
 import { type AiModel, type CredentialView, listModels } from '@admin/ai/api'
+import { formatCompactTokens, formatPerMTok } from '@admin/ai/usageFormat'
 import styles from './ModelPicker.module.css'
 
 export interface ModelChoice {
@@ -65,28 +66,10 @@ interface ModelPickerProps {
 const SEP = '\0'
 const choiceKey = (credentialId: string, modelId: string) => `${credentialId}${SEP}${modelId}`
 
-/** A per-million-token USD price → compact label. `$3`, `$0.50`, `$1.25`. */
-function formatPerMTok(value: number): string {
-  if (value === 0) return '$0'
-  // Sub-dollar prices keep two decimals; whole-dollar prices drop the `.00`.
-  const text = value < 1 ? value.toFixed(2) : String(Math.round(value * 100) / 100)
-  return `$${text}`
-}
-
 /** Input/output price pair shown inline per model row, e.g. `$3 / $15`. */
 function formatModelPrice(model: AiModel): string | null {
   if (!model.pricing) return null
   return `${formatPerMTok(model.pricing.inputPerMTok)} / ${formatPerMTok(model.pricing.outputPerMTok)}`
-}
-
-/** Context window token count → compact label. `200K`, `1M`. */
-function formatContextWindow(tokens: number | undefined): string | null {
-  if (!tokens || tokens <= 0) return null
-  if (tokens >= 1_000_000) {
-    const millions = tokens / 1_000_000
-    return `${Math.round(millions * 10) / 10}M`
-  }
-  return `${Math.round(tokens / 1000)}K`
 }
 
 export function ModelPicker({
@@ -361,7 +344,7 @@ export function ModelPicker({
                   const isSelected =
                     value?.credentialId === credentialId && value?.modelId === model.id
                   const priceLabel = formatModelPrice(model)
-                  const contextLabel = formatContextWindow(model.contextWindow)
+                  const contextLabel = model.contextWindow ? formatCompactTokens(model.contextWindow) : null
                   items.push(
                     <ContextMenuItem
                       key={key}

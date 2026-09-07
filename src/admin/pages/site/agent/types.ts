@@ -162,6 +162,9 @@ export interface AgentToolCall {
    * agent looked at; never persisted — it rehydrates empty after a reload.
    */
   previewImages?: string[]
+  /** Wall-clock timing: observed live in the browser, or rebuilt from row timestamps on rehydrate. */
+  startedAt?: number
+  durationMs?: number
 }
 
 /**

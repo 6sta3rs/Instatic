@@ -887,10 +887,6 @@ describe('SiteExplorerPanel', () => {
       new URL('../../admin/pages/site/sidebars/RightSidebar/RightSidebar.module.css', import.meta.url),
       'utf-8',
     )
-    const agentPanelCss = readFileSync(
-      new URL('../../admin/pages/site/panels/AgentPanel/AgentPanel.module.css', import.meta.url),
-      'utf-8',
-    )
     const propertiesPanelCss = readFileSync(
       new URL('../../admin/pages/site/panels/PropertiesPanel/PropertiesPanel.module.css', import.meta.url),
       'utf-8',
@@ -900,11 +896,10 @@ describe('SiteExplorerPanel', () => {
     const dockedSlotRule = leftSidebarCss.match(/\.panelSlot\s*\{[\s\S]*?\}/)?.[0] ?? ''
     const rightSidebarRule = rightSidebarCss.match(/\.sidebar\s*\{[\s\S]*?\}/)?.[0] ?? ''
     const floatingSlotRule = leftSidebarCss.match(/\.panelSlotFloating\s*\{[\s\S]*?\}/)?.[0] ?? ''
-    const agentRule = agentPanelCss.match(/\.floatPanel\s*\{[\s\S]*?\}/)?.[0] ?? ''
     const propertiesRule = propertiesPanelCss.match(/\.panel\s*\{[\s\S]*?\}/)?.[0] ?? ''
     const dockedZIndexes = [dockedSlotRule, rightSidebarRule]
       .map((rule) => Number(rule.match(/z-index:\s*(\d+)/)?.[1]))
-    const floatingZIndexes = [floatingSlotRule, agentRule, propertiesRule]
+    const floatingZIndexes = [floatingSlotRule, propertiesRule]
       .map((rule) => Number(rule.match(/z-index:\s*(\d+)/)?.[1]))
 
     expect(sidebarRule).not.toContain('z-index:')
