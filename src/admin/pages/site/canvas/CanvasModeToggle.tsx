@@ -55,6 +55,7 @@ export function CanvasModeToggle({ scriptStatus, onRefreshScripts, peek = false 
   const activeBreakpointId = useEditorStore((s) => s.activeBreakpointId)
   const setActiveBreakpoint = useEditorStore((s) => s.setActiveBreakpoint)
   const runScripts = useEditorStore((s) => s.runScripts)
+  const scriptsOn = runScripts || view === 'live'
   const setRunScripts = useEditorStore((s) => s.setRunScripts)
 
   // The toggle lives inside the canvas surface, which has its own click /
@@ -105,22 +106,25 @@ export function CanvasModeToggle({ scriptStatus, onRefreshScripts, peek = false 
       </div>
 
       {/* Run scripts toggle — injects the site's bundled runtime scripts into
-          the editable frames so authored behaviour runs while editing. */}
+          the editable frames so authored behaviour runs while editing. The
+          live preview always runs them (it shows the page as published), so
+          the toggle is pinned on there. */}
       <span className={styles.divider} aria-hidden="true" />
-      <Tooltip content="Run site scripts inside the editable frames">
+      <Tooltip content={scriptsOn && view === 'live' ? 'Live preview always runs site scripts' : 'Run site scripts inside the editable frames'}>
         <button
           type="button"
-          aria-pressed={runScripts}
+          aria-pressed={scriptsOn}
           aria-label="Run scripts"
           data-testid="canvas-run-scripts-toggle"
-          className={cn(styles.tab, runScripts && styles.tabActive)}
-          data-script-status={runScripts ? scriptStatus : undefined}
+          className={cn(styles.tab, scriptsOn && styles.tabActive)}
+          data-script-status={scriptsOn ? scriptStatus : undefined}
+          disabled={view === 'live'}
           onClick={() => setRunScripts(!runScripts)}
         >
           <CodeIcon size={14} aria-hidden="true" />
         </button>
       </Tooltip>
-      {runScripts && (
+      {scriptsOn && (
         <Tooltip content="Re-run scripts from current site state">
           <button
             type="button"

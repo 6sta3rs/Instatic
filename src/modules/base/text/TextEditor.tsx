@@ -27,6 +27,7 @@ export const TextEditor: React.FC<ModuleComponentProps<TextStoredProps>> = ({
   mcClassName,
   nodeWrapperProps,
   inlineEdit,
+  livePreview,
 }) => {
   const tag = normalizeTag(props.tag)
 
@@ -58,8 +59,10 @@ export const TextEditor: React.FC<ModuleComponentProps<TextStoredProps>> = ({
     return <BareText text={props.text ?? ''} />
   }
 
-  // Display: escaped text with newlines as <br>, matching the publisher.
-  const html = rawTextToBreakHtml(props.text || 'Text')
+  // Display: escaped text with newlines as <br>, matching the publisher. The
+  // "Text" placeholder is a canvas affordance for empty nodes; the live preview
+  // renders exactly what publishes.
+  const html = rawTextToBreakHtml(props.text || (livePreview ? '' : 'Text'))
   const Tag = tag as React.ElementType
   return React.createElement(Tag, {
     ...nodeWrapperProps,

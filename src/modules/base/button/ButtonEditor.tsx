@@ -21,8 +21,11 @@ export const ButtonEditor: React.FC<ModuleComponentProps<ButtonStoredProps>> = (
   mcClassName,
   nodeWrapperProps,
   inlineEdit,
+  livePreview,
 }) => {
-  const label = props.label || 'Button'
+  // "Button" is a canvas placeholder for an empty label; the live preview
+  // renders exactly what publishes.
+  const label = props.label || (livePreview ? '' : 'Button')
   const htmlAttrs = htmlAttributesForReact(props.htmlAttributes)
   const anchor = resolveButtonAnchor(props.href)
   // React.createElement (not JSX) so the editable element's generic

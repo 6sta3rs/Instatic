@@ -121,6 +121,12 @@ export interface ModuleComponentProps<
   props: TProps
   nodeId: string
   isSelected: boolean
+  /**
+   * True inside the editor's live preview frame. The preview shows the page
+   * as published, so modules must not render canvas-only affordances there
+   * (e.g. the "Text" / "Button" placeholder for an empty node).
+   */
+  livePreview?: boolean
   /** Already-rendered child module React nodes */
   children?: ReactNode
   /**

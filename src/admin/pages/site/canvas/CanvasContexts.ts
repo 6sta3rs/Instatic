@@ -24,6 +24,14 @@ export const CanvasViewportActionsContext =
   createContext<CanvasViewportActionsContextValue | null>(null)
 
 export const CanvasBreakpointContext = createContext<string | undefined>(undefined)
+/**
+ * How the frame treats pointer input. `'canvas'` frames are editable: clicks
+ * select nodes, hover draws rings, double-click starts inline editing.
+ * `'live'` frames are a read-only preview: NodeRenderer attaches no editor
+ * handlers, so links, buttons, forms and runtime scripts behave exactly as
+ * they do on the published page.
+ */
+export const CanvasInteractionContext = createContext<'canvas' | 'live'>('canvas')
 export const CanvasTemplateContext = createContext<TemplateRenderDataContext | undefined>(undefined)
 /** Final srcDoc document owned by the nearest IframeFrameSurface. */
 export const CanvasDocumentContext = createContext<Document | null>(null)

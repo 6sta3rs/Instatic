@@ -419,12 +419,14 @@ export function CanvasRoot({ editable = true }: CanvasRootProps) {
   // Runtime scripts (opt-in "Run scripts" toggle). Built once here and shared
   // by every editable frame — the design canvas's per-breakpoint frames AND
   // the live surface's single frame — so the same bundle runs everywhere
-  // without rebuilding per frame. Idle (no build) while the toggle is off.
+  // without rebuilding per frame. Idle (no build) while the toggle is off —
+  // except in live mode, which previews the page as published and therefore
+  // always runs the site's scripts.
   const scriptBuild = useRuntimeScriptBuild({
     page: canvasPage,
     breakpointId: activeBreakpointId,
     templateContext: templatePreviewContext,
-    enabled: runScripts,
+    enabled: runScripts || isLive,
   })
   const runtimeScripts = scriptBuild.scripts
 

@@ -90,6 +90,7 @@ import {
 import { useEditorStore } from '@site/store/store'
 import { closestReadonlyRegion, isElementLike } from './readonlyRegion'
 import { CanvasDocumentContext, CanvasFrameElementContext } from './CanvasContexts'
+import { installLivePreviewLinkNavigation } from './livePreviewLinks'
 import styles from './IframeFrameSurface.module.css'
 
 const IFRAME_DOCUMENT_SENTINEL = 'data-instatic-canvas-document'
@@ -206,6 +207,13 @@ export const IframeFrameSurface = forwardRef<IframeFrameSurfaceHandle, IframeFra
     useIframeCursorBridge(iframeRef, iframeDoc, { onCursorMove, onCursorLeave })
     useCanvasFormControlSuppression(iframeDoc, { breakpointId, enabled: !isLive })
     useIframeFrameAutoHeight({ iframeRef, iframeDoc, isLive })
+
+    // Live preview: internal links navigate the preview instead of loading the
+    // admin app inside the srcdoc frame.
+    useEffect(() => {
+      if (!isLive || !iframeDoc) return
+      return installLivePreviewLinkNavigation(iframeDoc, window.location.origin)
+    }, [iframeDoc, isLive])
 
     // Bridge the iframe handle out to the parent (selection overlay reads
     // `iframeElement` to translate inside-iframe rects into editor coordinates).

@@ -3,12 +3,12 @@
  * canvasView is 'live'.
  *
  * This replaces the design canvas's pan/zoom multi-breakpoint layer with ONE
- * frame at 100% size, scrolling normally — like a conventional visual editor's
- * live view. Crucially it is NOT a read-only preview: it reuses the very same
- * editable iframe (`IframeFrameSurface`) and selection overlay the design
- * canvas uses, so click-to-select, the properties panel, and structural edits
- * all keep working here. The only differences from a design frame are layout
- * (single, real-size, internally scrolling) and the absence of pan/zoom.
+ * frame at 100% size, scrolling normally. It is a READ-ONLY preview of the
+ * page as published: `CanvasInteractionContext` is `'live'`, so NodeRenderer
+ * attaches no selection / hover / inline-edit handlers and native behaviour
+ * (links, buttons, forms, runtime scripts) works as on the live site. Internal
+ * links navigate the preview to the matching page (`livePreviewLinks.ts`).
+ * There is no selection overlay here — editing happens in the design view.
  *
  * Width model ("fluid + presets"):
  * - The frame fills the available surface width by default (fluid).
@@ -39,9 +39,8 @@ import {
 import type { Breakpoint, Page } from '@core/page-tree'
 import type { TemplateRenderDataContext } from '@core/templates/dynamicBindings'
 import { CanvasComposedTree } from './CanvasComposedTree'
-import { BreakpointSelectionOverlay } from './BreakpointSelectionOverlay'
-import { CanvasBreakpointContext, CanvasTemplateContext } from './CanvasContexts'
-import { IframeFrameSurface, type IframeFrameSurfaceHandle } from './IframeFrameSurface'
+import { CanvasBreakpointContext, CanvasInteractionContext, CanvasTemplateContext } from './CanvasContexts'
+import { IframeFrameSurface } from './IframeFrameSurface'
 import type { InjectableRuntimeScript } from './useRuntimeScriptBuild'
 import { CanvasFrameSkeleton } from '@admin/shared/CanvasFrameSkeleton'
 import styles from './CanvasLiveSurface.module.css'
@@ -84,11 +83,6 @@ export function CanvasLiveSurface({
 }: CanvasLiveSurfaceProps) {
   const surfaceRef = useRef<HTMLDivElement>(null)
   const dragRef = useRef<ResizeDragState | null>(null)
-
-  // Outer viewport `<div>` wrapping the iframe — the selection overlay measures
-  // it for positioning context, and queries the iframe element for node rects.
-  const viewportRef = useRef<HTMLDivElement | null>(null)
-  const [iframeEl, setIframeEl] = useState<HTMLIFrameElement | null>(null)
 
   const [containerWidth, setContainerWidth] = useState<number | null>(null)
   const [widthOverride, setWidthOverride] = useState<LiveWidthOverride | null>(null)
@@ -143,10 +137,6 @@ export function CanvasLiveSurface({
     dragRef.current = null
   }, [])
 
-  const handleIframeRef = (handle: IframeFrameSurfaceHandle | null) => {
-    setIframeEl(handle?.iframeElement ?? null)
-  }
-
   return (
     <div ref={surfaceRef} className={styles.surface} data-testid="canvas-live-surface">
       {page && activeBreakpoint && effectiveWidth !== null ? (
@@ -162,30 +152,21 @@ export function CanvasLiveSurface({
             onPointerCancel={finishDrag}
           />
 
-          <div
-            ref={viewportRef}
-            data-breakpoint-id={activeBreakpoint.id}
-            className={styles.iframeViewport}
-          >
+          <div data-breakpoint-id={activeBreakpoint.id} className={styles.iframeViewport}>
             <IframeFrameSurface
-              ref={handleIframeRef}
               interaction="live"
               breakpointId={activeBreakpoint.id}
               width={activeBreakpoint.width}
               runtimeScripts={runtimeScripts}
             >
-              <CanvasTemplateContext.Provider value={templateContext}>
-                <CanvasBreakpointContext.Provider value={activeBreakpoint.id}>
-                  <CanvasComposedTree page={page} />
-                </CanvasBreakpointContext.Provider>
-              </CanvasTemplateContext.Provider>
+              <CanvasInteractionContext.Provider value="live">
+                <CanvasTemplateContext.Provider value={templateContext}>
+                  <CanvasBreakpointContext.Provider value={activeBreakpoint.id}>
+                    <CanvasComposedTree page={page} />
+                  </CanvasBreakpointContext.Provider>
+                </CanvasTemplateContext.Provider>
+              </CanvasInteractionContext.Provider>
             </IframeFrameSurface>
-
-            <BreakpointSelectionOverlay
-              breakpointId={activeBreakpoint.id}
-              viewportRef={viewportRef}
-              iframeElement={iframeEl}
-            />
           </div>
 
           <LiveResizeHandle

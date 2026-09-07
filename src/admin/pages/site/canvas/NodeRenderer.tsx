@@ -34,7 +34,7 @@ import type { PageNode } from '@core/page-tree'
 import { WarningDiamondSolidIcon } from 'pixel-art-icons/icons/warning-diamond-solid'
 import { ErrorBoundary } from '@ui/components/ErrorBoundary'
 import { ModuleSandboxFrame } from './ModuleSandboxFrame'
-import { CanvasBreakpointContext, CanvasSelectionContext, CanvasTemplateContext } from './CanvasContexts'
+import { CanvasBreakpointContext, CanvasInteractionContext, CanvasSelectionContext, CanvasTemplateContext } from './CanvasContexts'
 import {
   addEditorFormPreviewProps,
   resolveEditorFormPreviewState,
@@ -71,9 +71,14 @@ export const NodeRenderer = memo(function NodeRenderer({ nodeId }: NodeRendererP
   // in a multi-selection shows the selection ring. The selector still resolves
   // to a boolean, so per-node memoization isn't disturbed — only rows whose
   // `includes(nodeId)` result flips will re-render.
-  const isSelected = useEditorStore((s) => s.selectedNodeIds.includes(nodeId))
+  // Live preview: the frame shows the page as published — no selection, no
+  // hover rings, no inline editing, and native click behaviour (links, forms,
+  // runtime scripts) is left alone.
+  const isLivePreview = use(CanvasInteractionContext) === 'live'
+  const isSelected = useEditorStore((s) => !isLivePreview && s.selectedNodeIds.includes(nodeId))
   const isHovered = useEditorStore(
     (s) =>
+      !isLivePreview &&
       s.hoveredNodeId === nodeId &&
       (!s.hoveredBreakpointId || s.hoveredBreakpointId === breakpointId),
   )
@@ -82,6 +87,7 @@ export const NodeRenderer = memo(function NodeRenderer({ nodeId }: NodeRendererP
   // keeps previewing the live-updating text normally.
   const isInlineEditing = useEditorStore(
     (s) =>
+      !isLivePreview &&
       s.activeInlineEdit !== null &&
       s.activeInlineEdit.nodeId === nodeId &&
       s.activeInlineEdit.breakpointId === breakpointId,
@@ -419,7 +425,13 @@ export const NodeRenderer = memo(function NodeRenderer({ nodeId }: NodeRendererP
       }
     : undefined
 
-  const effectiveWrapperProps: NodeWrapperPropsType = isInlineEditing
+  const effectiveWrapperProps: NodeWrapperPropsType = isLivePreview
+    ? {
+        'data-node-id': nodeId,
+        'data-module-id': node.moduleId,
+        ...(inlineStyle ? { style: inlineStyle } : {}),
+      }
+    : isInlineEditing
     ? {
         'data-node-id': nodeId,
         'data-module-id': node.moduleId,
@@ -454,6 +466,7 @@ export const NodeRenderer = memo(function NodeRenderer({ nodeId }: NodeRendererP
           props={effectiveProps as never}
           nodeId={nodeId}
           isSelected={isSelected}
+          livePreview={isLivePreview}
           mcClassName={mcClassName}
           nodeWrapperProps={effectiveWrapperProps}
           inlineEdit={inlineEditBinding}
