@@ -197,6 +197,20 @@ const ChatChunkSchema = Type.Object(
         { additionalProperties: true },
       ),
     ),
+    // Gateways (OpenRouter in particular) report a provider failure that
+    // happens AFTER the 200 response started — rate limit on a free model,
+    // upstream timeout — as a chunk with a top-level `error` object instead of
+    // closing the socket with an HTTP status. Without reading it the stream
+    // just ends, `finish()` sees no content, and the turn dies silently.
+    error: nullable(
+      Type.Object(
+        {
+          message: nullable(Type.String()),
+          code: nullable(Type.Union([Type.String(), Type.Number()])),
+        },
+        { additionalProperties: true },
+      ),
+    ),
   },
   { additionalProperties: true },
 )
@@ -219,6 +233,7 @@ export class ChatCompletionsTurnTranslator implements TurnTranslator<ChatTurn> {
   private readonly order: number[] = []
   private emitted = false
   private usage: TurnUsage | null = null
+  private finishReason: string | null = null
 
   translate(frame: SseFrame): AiStreamEvent[] {
     let chunk: Static<typeof ChatChunkSchema>
@@ -227,6 +242,13 @@ export class ChatCompletionsTurnTranslator implements TurnTranslator<ChatTurn> {
     } catch {
       // Keep-alive / unparseable frame — not fatal.
       return []
+    }
+
+    if (chunk.error) {
+      const detail = chunk.error.message
+        ? `${chunk.error.message}${chunk.error.code != null ? ` (${chunk.error.code})` : ''}`
+        : 'stream failed'
+      return [{ type: 'error', message: `Provider error: ${detail}` }]
     }
 
     if (chunk.usage) {
@@ -238,6 +260,7 @@ export class ChatCompletionsTurnTranslator implements TurnTranslator<ChatTurn> {
 
     const choice = chunk.choices?.[0]
     if (!choice) return []
+    if (choice.finish_reason) this.finishReason = choice.finish_reason
 
     const events: AiStreamEvent[] = []
     const delta = choice.delta
@@ -305,6 +328,7 @@ export class ChatCompletionsTurnTranslator implements TurnTranslator<ChatTurn> {
       toolCalls,
       assistantMessage: this.text || chatToolCalls.length > 0 ? [assistant] : null,
       usage: this.usage,
+      finishReason: this.finishReason,
     }
   }
 }

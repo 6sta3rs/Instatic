@@ -196,7 +196,16 @@ const ResponsesEventSchema = Type.Object(
       ),
     ),
     response: Type.Optional(
-      Type.Object({ usage: Type.Optional(ResponsesUsageSchema) }, { additionalProperties: true }),
+      Type.Object(
+        {
+          usage: Type.Optional(ResponsesUsageSchema),
+          // `response.incomplete` says why the model stopped early.
+          incomplete_details: Type.Optional(
+            Type.Object({ reason: Type.Optional(Type.String()) }, { additionalProperties: true }),
+          ),
+        },
+        { additionalProperties: true },
+      ),
     ),
     // `error` events carry a top-level message.
     message: Type.Optional(Type.String()),
@@ -220,6 +229,7 @@ export class ResponsesTurnTranslator implements TurnTranslator<ResponsesTurn> {
   private readonly calls: PendingCall[] = []
   private readonly toolCalls: TurnToolCall[] = []
   private usage: TurnUsage | null = null
+  private finishReason: string | null = null
 
   translate(frame: SseFrame): AiStreamEvent[] {
     let event: Static<typeof ResponsesEventSchema>
@@ -252,7 +262,14 @@ export class ResponsesTurnTranslator implements TurnTranslator<ResponsesTurn> {
         return [{ type: 'toolCall', toolCallId: callId, toolName: name, input, status: 'pending' }]
       }
 
+      // `response.incomplete` is the Responses-API spelling of "output cap hit"
+      // (`incomplete_details.reason === 'max_output_tokens'`). It carries the
+      // final usage exactly like `response.completed`, so both share the arm.
+      case 'response.incomplete':
       case 'response.completed': {
+        if (event.response?.incomplete_details?.reason === 'max_output_tokens') {
+          this.finishReason = 'length'
+        }
         const usage = event.response?.usage
         this.usage = {
           promptTokens: usage?.input_tokens ?? 0,
@@ -302,6 +319,7 @@ export class ResponsesTurnTranslator implements TurnTranslator<ResponsesTurn> {
       toolCalls: this.toolCalls,
       assistantMessage: items.length > 0 ? items : null,
       usage: this.usage,
+      finishReason: this.finishReason,
     }
   }
 }

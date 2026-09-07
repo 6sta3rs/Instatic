@@ -45,6 +45,22 @@ describe('chatCompletions shared adapter', () => {
     expect(result.toolCalls).toEqual([])
   })
 
+  it('carries the finish_reason so the loop can tell a truncated reply from a clean stop', () => {
+    const t = new ChatCompletionsTurnTranslator()
+    t.translate(frame({ choices: [{ delta: { content: 'Half' } }] }))
+    t.translate(frame({ choices: [{ delta: {}, finish_reason: 'length' }] }))
+    expect(t.finish().finishReason).toBe('length')
+  })
+
+  // OpenRouter reports a mid-stream provider failure (free-model rate limit,
+  // upstream timeout) as a chunk with a top-level `error` object, not an HTTP
+  // status. Ignoring it ended the turn with no reply and no explanation.
+  it('surfaces a mid-stream error chunk as an error event', () => {
+    const t = new ChatCompletionsTurnTranslator()
+    const events = t.translate(frame({ error: { message: 'Rate limit exceeded', code: 429 } }))
+    expect(events).toEqual([{ type: 'error', message: 'Provider error: Rate limit exceeded (429)' }])
+  })
+
   // Real OpenAI-compatible gateways (OpenCode Zen, OpenRouter, …) send explicit
   // `null` for optional per-chunk fields rather than omitting them. The chunk
   // schema must tolerate these, or `parseValue` throws, the frame is dropped,

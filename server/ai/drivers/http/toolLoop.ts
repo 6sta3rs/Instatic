@@ -75,7 +75,16 @@ export interface TurnResult<TMessage> {
   readonly assistantMessage: TMessage | null
   /** Token usage for this single API call, if reported. */
   readonly usage: TurnUsage | null
+  /**
+   * Provider-native finish reason, when the provider reported one. The loop
+   * only inspects it for the output-cap values (`length` / `max_tokens`), which
+   * mean the reply was cut off and must not be treated as a clean stop.
+   */
+  readonly finishReason?: string | null
 }
+
+/** Provider finish reasons that mean "the output cap cut the reply off". */
+const TRUNCATED_FINISH_REASONS = new Set(['length', 'max_tokens'])
 
 /**
  * Stateful translator for ONE API call. The loop feeds it every SSE frame via
@@ -214,7 +223,29 @@ export async function* runToolLoop<TMessage>(
       }
     }
 
+    // A round the output cap cut off, or one that produced neither text nor
+    // tool calls, used to end the turn in silence: the user watched the agent
+    // read a few documents and then "give up" with no reply at all. Both are
+    // failures — say so. Usage goes first so the aborted round is still billed
+    // and audited honestly.
+    if (turn.finishReason && TRUNCATED_FINISH_REASONS.has(turn.finishReason)) {
+      yield aggregateUsageEvent()
+      yield {
+        type: 'error',
+        message: `${adapter.label} cut the reply short: the model hit its output token limit. Ask it to continue.`,
+      }
+      return
+    }
+
     if (turn.stop || turn.toolCalls.length === 0) {
+      if (turn.assistantMessage === null) {
+        yield aggregateUsageEvent()
+        yield {
+          type: 'error',
+          message: `${adapter.label} returned an empty reply (no text, no tool calls). Try again or pick a different model.`,
+        }
+        return
+      }
       break
     }
 

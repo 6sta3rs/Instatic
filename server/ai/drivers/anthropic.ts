@@ -587,6 +587,7 @@ export class AnthropicTurnTranslator implements TurnTranslator<AnthropicMessage>
       toolCalls: this.toolCalls,
       assistantMessage: content.length > 0 ? { role: 'assistant', content } : null,
       usage: this.toTurnUsage(),
+      finishReason: this.stopReason,
     }
   }
 
