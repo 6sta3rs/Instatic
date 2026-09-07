@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test'
 import { existsSync, readFileSync } from 'node:fs'
 import { bunCommand, bunRunCommand, viteCommand } from '../../scripts/lib/bunCommand'
+import { isLoopbackHost, parsePublishedPort } from '../../scripts/lib/composePort'
 
 const root = new URL('../../', import.meta.url)
 
@@ -30,9 +31,9 @@ describe('development workflow', () => {
     expect(script).toContain("viteCommand('--host', '127.0.0.1'")
     expect(script).not.toContain('command: `vite')
     expect(script).not.toContain('command.split')
-    // Knows about the docker postgres host port.
-    expect(script).toContain('127.0.0.1')
-    expect(script).toContain('5433')
+    // Derives the postgres host/port from DATABASE_URL rather than hardcoding it.
+    expect(script).toContain("new URL(DATABASE_URL)")
+    expect(script).not.toContain('5433')
     // Manages the docker postgres + app containers.
     expect(script).toContain('compose')
     expect(script).toContain('postgres')
@@ -126,14 +127,54 @@ describe('development workflow', () => {
     expect(viteConfig).toContain("pathname.startsWith('/_instatic/assets/')")
   })
 
-  it('Docker Postgres uses a non-default host port for local dev', () => {
+  it('Docker Postgres uses a non-default, overridable host port for local dev', () => {
     const compose = readSiteFile('docker-compose.yml')
 
-    // docker-compose.yml is dev-only and only exposes the Postgres container
-    // on a non-default host port (5433) to avoid clashing with a local
-    // Postgres install. The DATABASE_URL the app uses to reach the container
-    // lives in compose.prod.yml — not in the dev-only compose file.
-    expect(compose).toContain('"5433:5432"')
+    // docker-compose.yml is dev-only and exposes the Postgres container on a
+    // non-default host port (5433) to avoid clashing with a local Postgres
+    // install. The port stays overridable because 5433 is itself not free on
+    // every machine — an unrelated project's postgres holding it made the app
+    // connect there and report an authentication failure. The DATABASE_URL the
+    // app uses to reach the container lives in compose.prod.yml — not here.
+    expect(compose).toContain('"${POSTGRES_HOST_PORT:-5433}:5432"')
     expect(compose).toContain('image: postgres:16')
+  })
+
+  it('`bun run dev` recreates the postgres container instead of reviving a stale one', () => {
+    const script = readSiteFile('scripts/dev.ts')
+
+    // `docker compose start` revives a container built from an older compose
+    // config forever — including one created before the host port was
+    // published, which is unreachable from the host. `up -d` reconciles it.
+    expect(script).toContain("['compose', 'up', '-d', 'postgres']")
+    expect(script).not.toContain("['compose', 'start', 'postgres']")
+  })
+
+  it('`bun run dev` proves it reached OUR database, not just an open port', () => {
+    const script = readSiteFile('scripts/dev.ts')
+
+    // A TCP probe (or an in-container `pg_isready`) passes even when a foreign
+    // postgres owns the host port, or when the port is not published at all.
+    // Only a real query distinguishes those from a healthy stack.
+    expect(script).toContain('assertPublishedPortMatches')
+    expect(script).toContain('assertDatabaseUsable')
+    expect(script).toContain('await sql`select 1`')
+    expect(script).not.toContain('pg_isready')
+  })
+
+  it('parses the host port out of `docker compose port` output', () => {
+    expect(parsePublishedPort('0.0.0.0:5434\n[::]:5434\n')).toBe(5434)
+    expect(parsePublishedPort('[::]:5434')).toBe(5434)
+    // No publish, or a container compose cannot describe.
+    expect(parsePublishedPort('')).toBeNull()
+    expect(parsePublishedPort('\n  \n')).toBeNull()
+    expect(parsePublishedPort('0.0.0.0:notaport')).toBeNull()
+  })
+
+  it('only provisions docker postgres for a database on this machine', () => {
+    expect(isLoopbackHost('localhost')).toBe(true)
+    expect(isLoopbackHost('127.0.0.1')).toBe(true)
+    expect(isLoopbackHost('[::1]')).toBe(true)
+    expect(isLoopbackHost('db.example.com')).toBe(false)
   })
 })

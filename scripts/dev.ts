@@ -8,13 +8,17 @@
  * The parent directory is created automatically on first run.
  *
  * Postgres mode: set DATABASE_URL=postgres://... to run against a Postgres
- * database. The script will manage a local docker postgres for you:
+ * database. When it points at this machine, the script manages the local
+ * docker postgres for you (a remote host is left alone):
  *
  *   1. Verifies the docker daemon is reachable.
- *   2. Starts the `postgres` compose service if it isn't running.
+ *   2. Brings up the `postgres` compose service (`up -d`, so a container
+ *      built from an older compose config gets reconciled).
  *   3. Stops the `app` compose service if it IS running (it would
  *      otherwise hold port 3001 and block the local cms).
- *   4. Waits until postgres actually accepts connections.
+ *   4. Checks the published host port matches DATABASE_URL, then runs one
+ *      real query so a foreign postgres squatting on that port is reported
+ *      as such instead of as an authentication failure.
  *
  * Either way, the script then:
  *
@@ -27,17 +31,17 @@
  *     and signals so Ctrl+C cleanly kills both.
  */
 
+import { SQL } from 'bun'
 import { mkdir } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { isSqliteUrl } from '../server/db'
 import { bunCommand, viteCommand } from './lib/bunCommand'
 import { ensureDependencies } from './lib/ensureDependencies'
+import { isLoopbackHost, parsePublishedPort } from './lib/composePort'
 import { ensurePortFree } from './lib/freePort'
 
 const CMS_PORT = Number(process.env.PORT ?? '3001')
 const VITE_PORT = Number(process.env.VITE_PORT ?? '5173')
-const POSTGRES_HOST = '127.0.0.1'
-const POSTGRES_PORT = 5433
 const DATABASE_URL = process.env.DATABASE_URL ?? 'sqlite:./.tmp/dev.db'
 
 const decoder = new TextDecoder()
@@ -46,8 +50,8 @@ function log(msg: string): void {
   console.error(`[dev] ${msg}`)
 }
 
-function fail(msg: string): never {
-  log(msg)
+function fail(...lines: string[]): never {
+  for (const line of lines) log(line)
   process.exit(1)
 }
 
@@ -146,28 +150,13 @@ function runDocker(args: string[], description: string): void {
 }
 
 function ensurePostgresRunning(): void {
-  const state = getComposeServiceState('postgres')
-  switch (state) {
-    case 'running':
-      log('Docker postgres is already running.')
-      return
-    case 'exited':
-    case 'created':
-    case 'paused':
-    case 'restarting':
-    case 'dead':
-      runDocker(
-        ['compose', 'start', 'postgres'],
-        `Docker postgres is ${state} — starting it...`,
-      )
-      return
-    case 'absent':
-      runDocker(
-        ['compose', 'up', '-d', 'postgres'],
-        'Docker postgres container not found — creating it...',
-      )
-      return
-  }
+  // `up -d` is idempotent AND reconciles the container with the compose file.
+  // `compose start` is not: it revives a container built from a stale config
+  // (e.g. one created before the host port mapping existed) forever.
+  runDocker(
+    ['compose', 'up', '-d', 'postgres'],
+    'Bringing up the docker postgres service...',
+  )
 }
 
 function stopAppContainerIfRunning(): void {
@@ -180,32 +169,69 @@ function stopAppContainerIfRunning(): void {
   }
 }
 
-async function waitForPostgresReady(timeoutMs = 60_000): Promise<void> {
-  log(`Waiting for postgres at ${POSTGRES_HOST}:${POSTGRES_PORT}...`)
+/**
+ * Fails when the port compose actually published differs from the one
+ * DATABASE_URL dials. Without this the app silently connects to whatever
+ * other postgres happens to own that port and reports an auth failure that
+ * looks like a credentials problem.
+ *
+ * A `null` reading (compose cannot describe the container) is not fatal —
+ * `assertDatabaseUsable` is the real gate.
+ */
+function assertPublishedPortMatches(expected: number): void {
+  const result = Bun.spawnSync(['docker', 'compose', 'port', 'postgres', '5432'], {
+    stdout: 'pipe',
+    stderr: 'ignore',
+  })
+  if (result.exitCode !== 0) return
+  const published = parsePublishedPort(decoder.decode(result.stdout))
+  if (published === null || published === expected) return
+
+  fail(
+    `DATABASE_URL points at port ${expected}, but the docker postgres is published on ${published}.`,
+    `Set POSTGRES_HOST_PORT=${expected} in .env (docker-compose.yml reads it), or point`,
+    `DATABASE_URL at port ${published}.`,
+  )
+}
+
+/** Waits for the port to start accepting TCP connections (container boot). */
+async function waitForPort(hostname: string, port: number, timeoutMs = 60_000): Promise<void> {
+  log(`Waiting for postgres at ${hostname}:${port}...`)
   const start = Date.now()
   while (Date.now() - start < timeoutMs) {
-    const result = Bun.spawnSync(
-      [
-        'docker',
-        'compose',
-        'exec',
-        '-T',
-        'postgres',
-        'pg_isready',
-        '-U',
-        'instatic',
-        '-d',
-        'instatic',
-      ],
-      { stdout: 'ignore', stderr: 'ignore' },
-    )
-    if (result.exitCode === 0) {
-      log('Postgres is accepting connections.')
+    try {
+      // Bun.connect requires at least one handler, even for a liveness probe.
+      const socket = await Bun.connect({ hostname, port, socket: { data() {} } })
+      socket.end()
       return
+    } catch {
+      await new Promise((resolve) => setTimeout(resolve, 500))
     }
-    await new Promise((resolve) => setTimeout(resolve, 500))
   }
-  fail(`Postgres did not become ready within ${timeoutMs}ms.`)
+  fail(`Nothing is listening on ${hostname}:${port} after ${timeoutMs}ms.`)
+}
+
+/**
+ * Runs one real query. A TCP probe only proves *something* answers; this
+ * proves it is OUR database. The difference matters because a postgres from
+ * an unrelated project holding the same host port fails here with an opaque
+ * "password authentication failed", which is not a credentials problem at all.
+ */
+async function assertDatabaseUsable(url: string, hostname: string, port: number): Promise<void> {
+  const sql = new SQL(url)
+  try {
+    await sql`select 1`
+    log('Postgres is accepting connections.')
+  } catch (err) {
+    fail(
+      `Something answers on ${hostname}:${port}, but it rejected us: ${String(err)}`,
+      'That usually means another postgres owns this port. List what is bound with:',
+      '  docker ps --format "{{.Names}} | {{.Ports}}"',
+      'Then pick a free port via POSTGRES_HOST_PORT + DATABASE_URL in .env.',
+    )
+  } finally {
+    await sql.end()
+  }
 }
 
 // --- main -----------------------------------------------------------------
@@ -215,15 +241,25 @@ if (isSqliteUrl(DATABASE_URL)) {
   await mkdir(dirname(dbPath), { recursive: true })
   log(`Using SQLite at ${dbPath} — skipping Postgres docker provisioning`)
 } else {
-  if (!dockerInstalled()) {
-    fail('Docker is not installed. Install Docker Desktop, or set DATABASE_URL to point at your own postgres.')
+  const dbUrl = new URL(DATABASE_URL)
+  const dbPort = Number(dbUrl.port || '5432')
+
+  if (isLoopbackHost(dbUrl.hostname)) {
+    if (!dockerInstalled()) {
+      fail('Docker is not installed. Install Docker Desktop, or set DATABASE_URL to point at your own postgres.')
+    }
+    if (!dockerDaemonRunning()) {
+      fail('Docker daemon is not running. Start Docker Desktop, or set DATABASE_URL to point at your own postgres.')
+    }
+    ensurePostgresRunning()
+    stopAppContainerIfRunning()
+    assertPublishedPortMatches(dbPort)
+  } else {
+    log(`DATABASE_URL points at ${dbUrl.hostname} — skipping docker postgres provisioning.`)
   }
-  if (!dockerDaemonRunning()) {
-    fail('Docker daemon is not running. Start Docker Desktop, or set DATABASE_URL to point at your own postgres.')
-  }
-  ensurePostgresRunning()
-  stopAppContainerIfRunning()
-  await waitForPostgresReady()
+
+  await waitForPort(dbUrl.hostname, dbPort)
+  await assertDatabaseUsable(DATABASE_URL, dbUrl.hostname, dbPort)
 }
 
 await ensureDependencies(log)
