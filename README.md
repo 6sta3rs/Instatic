@@ -1,3 +1,15 @@
+> [!NOTE]
+> **About this fork.** This is [Paweł Stach](https://github.com/6sta3rs)'s fork of [CoreBunch/Instatic](https://github.com/CoreBunch/Instatic). Everything below is the upstream README. My work in this fork (Aug–Sep 2026):
+>
+> - **Inspector panel redesign** — rebuilt the editor's style inspector around scoped sections, with instant edits, spacing and resize controls, and canvas handles for border radius.
+> - **Colour picker** — alpha, colour formats, eyedropper and design tokens; gradient editing straight from the background swatch, with gradients you can drag on the element.
+> - **Canvas** — drag absolutely-positioned elements directly on the canvas; floating, draggable panels and popouts.
+> - **Media** — crop with a focus area, image-fit control and Unsplash import; stable public URLs when a file is replaced.
+> - **Icons and components** — pick icons from the vendored icon set; visual component variants the AI agent can use.
+> - **Fixes** — AI chat history was saved as `"[object Object]"` on Postgres; the agent now answers in the user's language.
+>
+> See all my commits: [`git log --author=sta3rs`](https://github.com/6sta3rs/Instatic/commits/main?author=6sta3rs).
+
 <div align="center">
 
 # Instatic
